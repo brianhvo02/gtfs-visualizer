@@ -5,6 +5,13 @@ on:
     - cron: '17 9 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-catalog
+  cancel-in-progress: false
+
 jobs:
   mirror:
     runs-on: ubuntu-latest

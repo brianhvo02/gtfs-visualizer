@@ -39,4 +39,4 @@ Create a public token in your Mapbox account with **URL restrictions** set to th
 
 ## Maintaining the catalog
 
-Edit `catalog/catalog.json`. Each entry needs a unique `id` (lowercase letters, digits, dashes), a `name`, a `region`, and the agency's `sourceUrl`. Commit and run the workflow (or wait for the nightly run). A feed that fails to download keeps its last good copy; the failure is recorded in `catalog.lock.json` and the workflow run is marked failed.
+Edit `catalog/catalog.json`. Each entry needs a unique `id` (lowercase letters, digits, dashes), a `name`, a `region`, and the agency's `sourceUrl`. Commit and run the workflow (or wait for the nightly run). A feed that fails to download keeps its last good copy; the failure is recorded in `catalog.lock.json` and the workflow run is marked failed. Downloads time out after 2 minutes.

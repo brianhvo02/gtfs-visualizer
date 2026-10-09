@@ -43,10 +43,12 @@ function r2Store(): ObjectStore {
   };
 }
 
+const FETCH_TIMEOUT_MS = 120_000;
+
 const catalogPath = new URL('../../catalog/catalog.json', import.meta.url);
 const catalog = parseCatalog(JSON.parse(await readFile(catalogPath, 'utf8')));
 const report = await mirrorCatalog(catalog, {
-  fetch: (url) => fetch(url),
+  fetch: (url) => fetch(url, {signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)}),
   store: r2Store(),
   now: () => new Date(),
   log: (message) => console.log(message),
