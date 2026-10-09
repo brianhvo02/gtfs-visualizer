@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "javascript": {
+      "source": "testdino-hq/google-styleguides-skills",
+      "sourceType": "github",
+      "skillPath": "javascript/SKILL.md",
+      "computedHash": "dbab511dbec176647ac78b7d9d8feffb58b7173d2822fd04bfc419b57c969fcd"
+    },
+    "json": {
+      "source": "testdino-hq/google-styleguides-skills",
+      "sourceType": "github",
+      "skillPath": "json/SKILL.md",
+      "computedHash": "48242a4cbb9c0cbdcc20f8bcd31e5a4b44b3958c752e2491155f9c872d671842"
+    },
+    "typescript": {
+      "source": "testdino-hq/google-styleguides-skills",
+      "sourceType": "github",
+      "skillPath": "typescript/SKILL.md",
+      "computedHash": "b3430736b34407ba4232683bf0f65ea08377d727e3869a841980a017f2d0f543"
+    }
+  }
+}
