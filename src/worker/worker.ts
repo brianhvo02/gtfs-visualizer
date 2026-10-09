@@ -17,7 +17,7 @@ async function start(): Promise<FeedService & Comlink.ProxyMarked> {
   const sqlite3 = await loadSqlite();
   const store = await createSahPoolStore(sqlite3);
   const service = new FeedService(store, {
-    fetch: (url) => fetch(url),
+    fetch: (url, init) => fetch(url, init),
     now: () => new Date(),
     estimate: () => navigator.storage.estimate(),
   });

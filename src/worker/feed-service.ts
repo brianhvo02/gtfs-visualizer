@@ -16,6 +16,7 @@ import type {
   StopProps,
   StorageCheck,
 } from '../shared/types.ts';
+import {STORAGE_HEADROOM} from '../shared/storage.ts';
 import {createGtfsTables} from './ddl.ts';
 import {buildDerivedTables} from './derive.ts';
 import type {FeedStore} from './feed-store.ts';
@@ -26,13 +27,12 @@ import type {Database} from './sqlite.ts';
 
 export const META_FILENAME = '/meta.db';
 const FEED_PREFIX = '/feeds/';
-const STORAGE_HEADROOM = 3;
 const CORS_MESSAGE =
   "Couldn't download the feed. The server may not allow downloads from other websites (CORS). " +
   'Download the zip yourself and upload it instead.';
 
 export interface FeedServiceDeps {
-  readonly fetch: (url: string) => Promise<Response>;
+  readonly fetch: (url: string, init?: RequestInit) => Promise<Response>;
   readonly now: () => Date;
   readonly estimate: () => Promise<StorageEstimate>;
 }
@@ -63,7 +63,11 @@ function failure(code: ImportErrorCode, message: string): ImportFailure {
   return {ok: false, code, message, issues: []};
 }
 
-function toFailure(error: unknown): ImportFailure {
+function toFailure(error: unknown, source: ImportSource): ImportFailure {
+  if (error instanceof TypeError && source.kind !== 'file') {
+    // fetch() rejects its body stream with a TypeError when the connection drops mid-download.
+    return failure('network', CORS_MESSAGE);
+  }
   if (error instanceof NotZipError) {
     return failure('not_zip', "This file isn't a zip archive. GTFS feeds are distributed as .zip files.");
   }
@@ -200,7 +204,7 @@ export class FeedService {
       return {ok: true, feed: record, issueCount: issues.totalCount()};
     } catch (error) {
       this.store.remove(filename);
-      return toFailure(error);
+      return toFailure(error, source);
     }
   }
 
@@ -239,7 +243,7 @@ export class FeedService {
         ok: true,
         stream: source.file.stream(),
         bytesTotal: source.file.size,
-        id: slugify(base),
+        id: this.unusedId(`file-${slugify(base)}`),
         sourceKind: 'file',
         sourceRef: source.file.name,
         fixedName: null,
@@ -249,7 +253,10 @@ export class FeedService {
     }
     let response: Response;
     try {
-      response = await this.deps.fetch(source.url);
+      response =
+        source.kind === 'catalog'
+          ? await this.deps.fetch(source.url, {cache: 'no-cache'})
+          : await this.deps.fetch(source.url);
     } catch {
       return failure('network', CORS_MESSAGE);
     }
@@ -276,13 +283,20 @@ export class FeedService {
       ok: true,
       stream: response.body,
       bytesTotal,
-      id: slugify(`${url.hostname}${url.pathname}`),
+      id: `url-${slugify(`${url.hostname}${url.pathname}${url.search}`)}`,
       sourceKind: 'url',
       sourceRef: source.url,
       fixedName: null,
       fallbackName: url.hostname,
       catalogSha256: null,
     };
+  }
+
+  /** Uploads never replace a saved feed: suffix -2, -3, ... until the id is free. */
+  private unusedId(base: string): string {
+    let id = base;
+    for (let n = 2; this.getRecord(id) !== null; n++) id = `${base}-${n}`;
+    return id;
   }
 
   private nameFromSummary(summary: FeedSummary): string | null {

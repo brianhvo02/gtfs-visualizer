@@ -21,14 +21,19 @@ describe('FeedService', () => {
   let store: MemoryFeedStore;
   let service: FeedService;
   let fetchImpl: (url: string) => Promise<Response>;
+  let fetchInits: Array<RequestInit | undefined>;
   let clock: number;
 
   beforeEach(async () => {
     store = new MemoryFeedStore(await loadSqlite());
     fetchImpl = async () => new Response(zipBytes());
+    fetchInits = [];
     clock = NOW.getTime();
     service = new FeedService(store, {
-      fetch: (url) => fetchImpl(url),
+      fetch: (url, init) => {
+        fetchInits.push(init);
+        return fetchImpl(url);
+      },
       now: () => new Date(clock++),
       estimate: async () => ({quota: 1000, usage: 400}),
     });
@@ -46,7 +51,7 @@ describe('FeedService', () => {
     );
     if (!result.ok) throw new Error(result.message);
     expect(result.feed).toMatchObject({
-      id: 'demo-transit',
+      id: 'file-demo-transit',
       name: 'Demo Transit Authority',
       sourceKind: 'file',
       sourceRef: 'demo-transit.zip',
@@ -55,7 +60,7 @@ describe('FeedService', () => {
     });
     expect(service.listFeeds()).toEqual([result.feed]);
     expect(progress.map((p) => p.stage)).toEqual(expect.arrayContaining(['parse', 'index', 'derive', 'register']));
-    expect(service.getRoutes('demo-transit').map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
+    expect(service.getRoutes('file-demo-transit').map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
   });
 
   it('imports from a catalog entry using the catalog name and checksum', async () => {
@@ -70,7 +75,7 @@ describe('FeedService', () => {
   it('derives an id from a URL', async () => {
     const result = await service.importFeed({kind: 'url', url: 'https://agency.example.com/gtfs/feed.zip'}, () => {});
     if (!result.ok) throw new Error(result.message);
-    expect(result.feed.id).toBe('agency-example-com-gtfs-feed-zip');
+    expect(result.feed.id).toBe('url-agency-example-com-gtfs-feed-zip');
   });
 
   it('explains network (CORS) failures', async () => {
@@ -103,9 +108,10 @@ describe('FeedService', () => {
     expect(service.listFeeds()).toEqual([]);
   });
 
-  it('replaces a feed on re-import and removes the old database', async () => {
-    const first = await importFile();
-    const second = await importFile();
+  it('replaces a feed on re-import of the same URL and removes the old database', async () => {
+    const url = { kind: 'url', url: 'https://agency.example.com/gtfs/feed.zip' } as const;
+    const first = await service.importFeed(url, () => {});
+    const second = await service.importFeed(url, () => {});
     if (!first.ok || !second.ok) throw new Error('import failed');
     expect(second.feed.dbFilename).not.toBe(first.feed.dbFilename);
     expect(service.listFeeds()).toHaveLength(1);
@@ -115,13 +121,13 @@ describe('FeedService', () => {
   it('opens, queries, and deletes feeds', async () => {
     const result = await importFile();
     if (!result.ok) throw new Error(result.message);
-    expect(service.openFeed('demo-transit')).toEqual(result.feed);
+    expect(service.openFeed('file-demo-transit')).toEqual(result.feed);
     expect(service.openFeed('missing')).toBeNull();
-    expect(service.getStopDetail('demo-transit', 'STN')?.routes).toHaveLength(2);
-    service.deleteFeed('demo-transit');
+    expect(service.getStopDetail('file-demo-transit', 'STN')?.routes).toHaveLength(2);
+    service.deleteFeed('file-demo-transit');
     expect(service.listFeeds()).toEqual([]);
     expect(store.list()).toEqual([META_FILENAME]);
-    expect(() => service.getRoutes('demo-transit')).toThrow('Feed not found: demo-transit');
+    expect(() => service.getRoutes('file-demo-transit')).toThrow('Feed not found: file-demo-transit');
   });
 
   it('removes orphaned feed databases at startup', async () => {
@@ -130,9 +136,77 @@ describe('FeedService', () => {
     expect(store.list()).toEqual([META_FILENAME]);
   });
 
-  it('checks storage headroom at 3x the download size', async () => {
-    expect(await service.checkStorage(100)).toEqual({ok: true, availableBytes: 600});
-    expect(await service.checkStorage(300)).toEqual({ok: false, availableBytes: 600});
+  it('checks storage headroom at the shared multiple of the download size', async () => {
+    expect(await service.checkStorage(40)).toEqual({ok: true, availableBytes: 600});
+    expect(await service.checkStorage(41)).toEqual({ok: false, availableBytes: 600});
+  });
+
+  it('never replaces a saved feed with an upload of the same name', async () => {
+    const first = await importFile('gtfs.zip');
+    const second = await importFile('gtfs.zip');
+    if (!first.ok || !second.ok) throw new Error('import failed');
+    expect([first.feed.id, second.feed.id]).toEqual(['file-gtfs', 'file-gtfs-2']);
+    expect(service.listFeeds()).toHaveLength(2);
+  });
+
+  it('does not let an upload replace a catalog feed with the same slug', async () => {
+    const catalog = await service.importFeed(
+      {kind: 'catalog', id: 'mbta', name: 'MBTA', url: 'https://r2.test/feeds/mbta.zip', sha256: 'abc'},
+      () => {},
+    );
+    const upload = await importFile('mbta.zip');
+    if (!catalog.ok || !upload.ok) throw new Error('import failed');
+    expect(upload.feed.id).toBe('file-mbta');
+    expect(service.listFeeds().map((f) => f.id).sort()).toEqual(['file-mbta', 'mbta']);
+  });
+
+  it('gives URLs that differ only in the query string different ids', async () => {
+    const a = await service.importFeed({kind: 'url', url: 'https://x.test/feed?agency=a'}, () => {});
+    const b = await service.importFeed({kind: 'url', url: 'https://x.test/feed?agency=b'}, () => {});
+    if (!a.ok || !b.ok) throw new Error('import failed');
+    expect(a.feed.id).not.toBe(b.feed.id);
+    expect(service.listFeeds()).toHaveLength(2);
+  });
+
+  it('maps a mid-download network failure to the network error and leaves nothing behind', async () => {
+    const bytes = zipBytes();
+    fetchImpl = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes.slice(0, 20));
+          },
+          pull(controller) {
+            controller.error(new TypeError('network error'));
+          },
+        }),
+      );
+    const result = await service.importFeed({kind: 'url', url: 'https://x.test/feed.zip'}, () => {});
+    expect(result).toMatchObject({ok: false, code: 'network'});
+    expect(result.ok ? '' : result.message).toMatch(/upload/i);
+    expect(store.list()).toEqual([META_FILENAME]);
+  });
+
+  it('keeps an existing feed untouched when a re-import fails', async () => {
+    const url = {kind: 'url', url: 'https://agency.example.com/gtfs/feed.zip'} as const;
+    const first = await service.importFeed(url, () => {});
+    if (!first.ok) throw new Error('import failed');
+    const feedsBefore = service.listFeeds();
+    const filesBefore = store.list().sort();
+    fetchImpl = async () => new Response(zipBytes(withoutFile('stops.txt')));
+    const second = await service.importFeed(url, () => {});
+    expect(second).toMatchObject({ok: false, code: 'fatal_issues'});
+    expect(service.listFeeds()).toEqual(feedsBefore);
+    expect(store.list().sort()).toEqual(filesBefore);
+    expect(service.getRoutes(first.feed.id).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
+  });
+
+  it('bypasses the HTTP cache for catalog downloads', async () => {
+    await service.importFeed(
+      {kind: 'catalog', id: 'demo', name: 'Demo', url: 'https://r2.test/feeds/demo.zip', sha256: 'abc'},
+      () => {},
+    );
+    expect(fetchInits[0]).toMatchObject({cache: 'no-cache'});
   });
 
   it('slugifies ids', () => {
