@@ -25,7 +25,8 @@ export function App(): ReactElement {
   if (state.kind !== 'ready') {
     return <HostNotice state={state} onTakeOver={() => void host.takeOver()} />;
   }
-  return <Explorer service={state.service} />;
+  // Remount after a worker restart so pending imports on the dead worker don't leave stale UI state.
+  return <Explorer key={state.generation} service={state.service} />;
 }
 
 function Explorer({service}: {readonly service: FeedApi}): ReactElement {

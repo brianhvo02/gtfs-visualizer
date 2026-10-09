@@ -71,7 +71,7 @@ describe('WorkerHost', () => {
   it('becomes ready after acquiring the lock', async () => {
     const {host} = makeHost(new FakeLocks());
     await host.start();
-    expect(host.getState()).toEqual({kind: 'ready', service: 'svc-1'});
+    expect(host.getState()).toEqual({kind: 'ready', service: 'svc-1', generation: 1});
   });
 
   it('ignores repeated start calls', async () => {
@@ -91,7 +91,7 @@ describe('WorkerHost', () => {
 
     await second.host.takeOver();
     await flush();
-    expect(second.host.getState()).toEqual({kind: 'ready', service: 'svc-1'});
+    expect(second.host.getState()).toEqual({kind: 'ready', service: 'svc-1', generation: 1});
     expect(first.host.getState()).toEqual({kind: 'taken-over'});
     expect(first.workers[0]?.terminated).toBe(true);
   });
@@ -128,7 +128,7 @@ describe('WorkerHost', () => {
     await host.start();
     workers[0]?.crash();
     await flush();
-    expect(host.getState()).toEqual({kind: 'ready', service: 'svc-2'});
+    expect(host.getState()).toEqual({kind: 'ready', service: 'svc-2', generation: 2});
     expect(workers[0]?.terminated).toBe(true);
     workers[1]?.crash();
     await flush();

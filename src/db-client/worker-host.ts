@@ -22,7 +22,7 @@ export interface HostDeps<W extends WorkerLike, S> {
 
 export type HostState<S> =
   | {readonly kind: 'starting'}
-  | {readonly kind: 'ready'; readonly service: S}
+  | {readonly kind: 'ready'; readonly service: S; readonly generation: number}
   | {readonly kind: 'other-tab'}
   | {readonly kind: 'taken-over'}
   | {readonly kind: 'unsupported'; readonly reason: string}
@@ -38,6 +38,7 @@ export class WorkerHost<W extends WorkerLike, S> {
   private state: HostState<S> = {kind: 'starting'};
   private worker: W | null = null;
   private restarts = 0;
+  private generation = 0;
   private started = false;
 
   constructor(deps: HostDeps<W, S>) {
@@ -110,7 +111,7 @@ export class WorkerHost<W extends WorkerLike, S> {
     });
     try {
       const service = await this.deps.connect(worker);
-      if (this.worker === worker) this.setState({kind: 'ready', service});
+      if (this.worker === worker) this.setState({kind: 'ready', service, generation: ++this.generation});
     } catch (error) {
       if (this.worker !== worker) return;
       const message = error instanceof Error ? error.message : String(error);
