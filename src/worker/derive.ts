@@ -90,8 +90,10 @@ function buildShapes(db: Database): void {
   const shapePoints = db.prepare(
     'SELECT shape_pt_lon, shape_pt_lat FROM shapes WHERE shape_id = ? AND shape_pt_lat IS NOT NULL AND shape_pt_lon IS NOT NULL ORDER BY shape_pt_sequence',
   );
-  const cache = new Map<string, Position[]>();
-  const coordsForShape = (shapeId: string): Position[] => {
+  // Caches only the serialized LineString per shape (null when fewer than 2 usable points),
+  // so full coordinate arrays are never held for every shape at once.
+  const cache = new Map<string, string | null>();
+  const lineForShape = (shapeId: string): string | null => {
     const cached = cache.get(shapeId);
     if (cached !== undefined) return cached;
     const coords: Position[] = [];
@@ -100,8 +102,9 @@ function buildShapes(db: Database): void {
       coords.push([round6(Number(shapePoints.get(0))), round6(Number(shapePoints.get(1)))]);
     }
     shapePoints.reset();
-    cache.set(shapeId, coords);
-    return coords;
+    const line = coords.length >= 2 ? lineString(coords) : null;
+    cache.set(shapeId, line);
+    return line;
   };
 
   const used = db.selectObjects(
@@ -110,8 +113,8 @@ function buildShapes(db: Database): void {
   for (const row of used) {
     const routeId = asString(row['route_id']) ?? '';
     const shapeId = asString(row['shape_id']) ?? '';
-    const coords = coordsForShape(shapeId);
-    if (coords.length >= 2) insert.bind([routeId, shapeId, lineString(coords)]).stepReset();
+    const line = lineForShape(shapeId);
+    if (line !== null) insert.bind([routeId, shapeId, line]).stepReset();
   }
 
   // Patterns whose representative trip has no usable shape get a line through their stops.
@@ -128,7 +131,7 @@ function buildShapes(db: Database): void {
     'SELECT pattern_id, route_id, shape_id, stop_ids_json FROM route_patterns',
   )) {
     const shapeId = asString(pattern['shape_id']);
-    if (shapeId !== null && coordsForShape(shapeId).length >= 2) continue;
+    if (shapeId !== null && lineForShape(shapeId) !== null) continue;
     const stopIds: unknown = JSON.parse(asString(pattern['stop_ids_json']) ?? '[]');
     if (!Array.isArray(stopIds)) continue;
     const coords: Position[] = [];
@@ -212,9 +215,14 @@ function buildSummary(db: Database, issues: IssueCollector): void {
 
 export function buildDerivedTables(db: Database, issues: IssueCollector): void {
   db.exec('BEGIN');
-  buildPatterns(db);
-  buildShapes(db);
-  buildStopRoutes(db);
-  buildSummary(db, issues);
-  db.exec('COMMIT');
+  try {
+    buildPatterns(db);
+    buildShapes(db);
+    buildStopRoutes(db);
+    buildSummary(db, issues);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }

@@ -1,8 +1,20 @@
 import {describe, expect, it} from 'vitest';
 import {loadSampleDb} from '../test-fixtures/sample-db.ts';
 import {SAMPLE_FEED, withFile} from '../test-fixtures/sample-feed.ts';
+import {buildDerivedTables} from './derive.ts';
 
 describe('buildDerivedTables', () => {
+  it('rolls back and leaves no open transaction when a step throws', async () => {
+    const {db, issues} = await loadSampleDb();
+    // Dropping stops makes buildShapes throw after buildPatterns has written inside the transaction.
+    db.exec(
+      'DROP TABLE route_patterns; DROP TABLE route_shapes; DROP TABLE stop_routes; DROP TABLE feed_summary; DROP TABLE stops;',
+    );
+    expect(() => buildDerivedTables(db, issues)).toThrow();
+    expect(db.selectValue("SELECT count(*) FROM sqlite_master WHERE name = 'route_patterns'")).toBe(0);
+    expect(() => db.exec('BEGIN; COMMIT')).not.toThrow();
+  });
+
   it('groups trips into stop patterns', async () => {
     const {db} = await loadSampleDb();
     expect(
