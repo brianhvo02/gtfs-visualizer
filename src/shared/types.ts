@@ -22,3 +22,13 @@ export interface ImportIssue {
   readonly code: IssueCode;
   readonly message: string;
 }
+
+export type ImportStage = 'parse' | 'index' | 'derive' | 'register';
+
+export interface ImportProgress {
+  readonly stage: ImportStage;
+  readonly file?: string;
+  readonly rowsDone?: number;
+  readonly bytesDone?: number;
+  readonly bytesTotal?: number | null;
+}
