@@ -26,3 +26,6 @@ dist-ssr
 # Agent workspaces
 .claude/worktrees/
 .superpowers/
+.env
+test-results
+playwright-report
