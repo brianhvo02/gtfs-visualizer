@@ -131,3 +131,50 @@ export interface StopProps {
   readonly name: string;
   readonly locationType: number;
 }
+
+export type FeedSourceKind = 'catalog' | 'url' | 'file';
+
+export interface FeedRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly sourceKind: FeedSourceKind;
+  readonly sourceRef: string;
+  readonly catalogSha256: string | null;
+  readonly importedAt: string;
+  readonly serviceStart: string | null;
+  readonly serviceEnd: string | null;
+  readonly dbFilename: string;
+}
+
+export type ImportSource =
+  | {
+      readonly kind: 'catalog';
+      readonly id: string;
+      readonly name: string;
+      readonly url: string;
+      readonly sha256: string | null;
+    }
+  | {readonly kind: 'url'; readonly url: string}
+  | {readonly kind: 'file'; readonly file: File};
+
+export type ImportErrorCode = 'network' | 'http' | 'not_zip' | 'fatal_issues' | 'quota' | 'unknown';
+
+export interface ImportFailure {
+  readonly ok: false;
+  readonly code: ImportErrorCode;
+  readonly message: string;
+  readonly issues: readonly ImportIssue[];
+}
+
+export interface ImportSuccess {
+  readonly ok: true;
+  readonly feed: FeedRecord;
+  readonly issueCount: number;
+}
+
+export type ImportResult = ImportSuccess | ImportFailure;
+
+export interface StorageCheck {
+  readonly ok: boolean;
+  readonly availableBytes: number | null;
+}
