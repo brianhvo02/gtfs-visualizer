@@ -47,13 +47,14 @@ const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 
 
 function makeHost(
   locks: FakeLocks,
-  options: {supported?: boolean; connectError?: string} = {},
+  options: {supported?: boolean; connectError?: string; createError?: string} = {},
 ): {host: WorkerHost<FakeWorker, string>; workers: FakeWorker[]} {
   const workers: FakeWorker[] = [];
   const host = new WorkerHost<FakeWorker, string>({
     locks,
     isSupported: () => options.supported ?? true,
     createWorker: () => {
+      if (options.createError !== undefined) throw new Error(options.createError);
       const worker = new FakeWorker();
       workers.push(worker);
       return worker;
@@ -114,6 +115,12 @@ describe('WorkerHost', () => {
     const {host} = makeHost(new FakeLocks(), {connectError: 'unsupported: no OPFS'});
     await host.start();
     expect(host.getState()).toEqual({kind: 'unsupported', reason: 'no OPFS'});
+  });
+
+  it('reports other lock errors as crashed, not taken over', async () => {
+    const {host} = makeHost(new FakeLocks(), {createError: 'boom'});
+    await host.start();
+    expect(host.getState()).toEqual({kind: 'crashed', message: 'boom'});
   });
 
   it('restarts once after a crash, then gives up', async () => {

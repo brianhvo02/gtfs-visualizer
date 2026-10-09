@@ -47,17 +47,22 @@ class SahPoolFeedStore implements FeedStore {
 }
 
 export async function createSahPoolStore(sqlite3: Sqlite3Static): Promise<FeedStore> {
+  // sqlite-wasm caches a failed init and rethrows it unless forced to retry.
+  const options = {
+    name: POOL_NAME,
+    initialCapacity: INITIAL_CAPACITY,
+    forceReinitIfPreviouslyFailed: true,
+  };
   let lastError: unknown = null;
   for (let attempt = 0; attempt < INSTALL_ATTEMPTS; attempt++) {
     try {
-      const pool = await sqlite3.installOpfsSAHPoolVfs({
-        name: POOL_NAME,
-        initialCapacity: INITIAL_CAPACITY,
-      });
+      const pool = await sqlite3.installOpfsSAHPoolVfs(options);
       return new SahPoolFeedStore(pool);
     } catch (error) {
       lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, INSTALL_RETRY_MS));
+      if (attempt < INSTALL_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, INSTALL_RETRY_MS));
+      }
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));

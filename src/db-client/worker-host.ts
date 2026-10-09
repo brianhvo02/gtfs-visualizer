@@ -87,10 +87,15 @@ export class WorkerHost<W extends WorkerLike, S> {
           // Hold the lock for the life of this tab.
           await new Promise<never>(() => {});
         })
-        .catch(() => {
-          // Another tab stole the lock.
+        .catch((error: unknown) => {
           this.terminate();
-          this.setState({kind: 'taken-over'});
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            // Another tab stole the lock.
+            this.setState({kind: 'taken-over'});
+          } else {
+            const message = error instanceof Error ? error.message : String(error);
+            this.setState({kind: 'crashed', message});
+          }
           resolve();
         });
     });
