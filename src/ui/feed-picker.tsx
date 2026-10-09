@@ -105,7 +105,12 @@ export function FeedPicker({service, catalogBaseUrl, onOpen}: FeedPickerProps): 
                   {feed.sourceKind !== 'file' && (
                     <button
                       type="button"
-                      disabled={importer.running}
+                      disabled={importer.running || (feed.sourceKind === 'catalog' && !entry?.available)}
+                      title={
+                        feed.sourceKind === 'catalog' && !entry?.available
+                          ? 'Not available in the catalog right now'
+                          : undefined
+                      }
                       aria-label={`Re-import ${feed.name}`}
                       onClick={() => void reimport(feed)}
                     >
