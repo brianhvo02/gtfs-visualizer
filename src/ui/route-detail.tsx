@@ -10,7 +10,10 @@ export interface RouteDetailViewProps {
   readonly routeId: string;
   readonly onBack: () => void;
   readonly onSelectStop: (stopId: string) => void;
-  /** Reports the stops of the displayed pattern so the map can show them. */
+  /**
+   * Reports the stops of the displayed pattern so the map can show them.
+   * Must be referentially stable (e.g. a state setter); it is an effect dependency.
+   */
   readonly onPatternStops: (stopIds: readonly string[]) => void;
 }
 

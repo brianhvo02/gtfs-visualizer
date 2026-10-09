@@ -1,4 +1,4 @@
-import type {ReactElement} from 'react';
+import {useMemo, type ReactElement} from 'react';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import {routeLabel} from '../gtfs/route-types.ts';
 import {fromIsoDate, todayInTimeZone, toIsoDate} from '../gtfs/time.ts';
@@ -28,7 +28,11 @@ export function StopDetailView({
   onSelectRoute,
   onDateChange,
 }: StopDetailViewProps): ReactElement {
-  const serviceDate = date ?? todayInTimeZone(timezone, new Date());
+  // Computed once per time zone so the default date does not change on re-render.
+  // Reading the clock here is intentional: "today" is sampled per mount and time zone.
+  // oxlint-disable-next-line react/purity
+  const today = useMemo(() => todayInTimeZone(timezone, new Date()), [timezone]);
+  const serviceDate = date ?? today;
   const detail = useAsync(() => service.getStopDetail(feedId, stopId), [service, feedId, stopId]);
   const departures = useAsync(
     () => service.getStopDepartures(feedId, stopId, serviceDate),
