@@ -144,8 +144,9 @@ export async function loadGtfsZip(
     rowsDone = 0;
     file.ondata = (error, chunk, final) => {
       if (error !== null) {
+        // A required table with broken data cannot be imported, so the failure is fatal.
         issues.add({
-          severity: 'error',
+          severity: tableForFile(name)?.requiredFile === true ? 'fatal' : 'error',
           file: name,
           line: null,
           column: null,

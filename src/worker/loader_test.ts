@@ -36,6 +36,23 @@ function counts(db: Database): Record<string, number> {
   );
 }
 
+/**
+ * Breaks the deflate stream of one entry by setting both block-type bits of its first byte
+ * (block type 3 is invalid), so decompression fails inside fflate.
+ */
+function corruptEntry(zip: Uint8Array, name: string): Uint8Array {
+  const needle = strToU8(name);
+  const nameAt = Array.from({length: zip.length}, (_, i) => i).find((i) =>
+    needle.every((byte, k) => zip[i + k] === byte),
+  );
+  if (nameAt === undefined) throw new Error(`${name} not found in zip`);
+  const headerAt = nameAt - 30;
+  const extraLength = zip[headerAt + 28] ?? 0;
+  const out = zip.slice();
+  out[nameAt + needle.length + extraLength] = (out[nameAt + needle.length + extraLength] ?? 0) | 0x06;
+  return out;
+}
+
 describe('loadGtfsZip', () => {
   let db: Database;
   let issues: IssueCollector;
@@ -122,6 +139,22 @@ describe('loadGtfsZip', () => {
     const result = await loadGtfsZip(db, streamOf(makeZip(withFile('shapes.txt', shapes))), issues);
     expect(result.fatal).toBe(false);
     expect(db.selectValue('SELECT count(*) FROM shapes')).toBe(0);
+  });
+
+  it('is fatal when a required entry fails to decompress', async () => {
+    const zip = corruptEntry(makeZip(SAMPLE_FEED), 'stop_times.txt');
+    const result = await loadGtfsZip(db, streamOf(zip), issues);
+    expect(result.fatal).toBe(true);
+    expect(issues.fatalIssues().map((i) => i.code)).toEqual(['zip_error']);
+    expect(issues.fatalIssues()[0]?.file).toBe('stop_times.txt');
+  });
+
+  it('keeps a decompression failure of an optional entry non-fatal', async () => {
+    const zip = corruptEntry(makeZip(SAMPLE_FEED), 'transfers.txt');
+    const result = await loadGtfsZip(db, streamOf(zip), issues);
+    expect(result.fatal).toBe(false);
+    expect(issues.fatalIssues()).toEqual([]);
+    expect(db.selectValue('SELECT count(*) FROM stop_times')).toBe(13);
   });
 
   it('reports progress up to the full byte count, then indexing', async () => {
