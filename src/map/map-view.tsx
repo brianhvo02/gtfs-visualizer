@@ -111,16 +111,20 @@ export function MapView({
       return;
     }
     let cancelled = false;
-    void Promise.all([service.getRouteShapesGeoJSON(feedId), service.getStopsGeoJSON(feedId)]).then(
-      ([routeShapes, stops]) => {
+    void Promise.all([service.getRouteShapesGeoJSON(feedId), service.getStopsGeoJSON(feedId)])
+      .then(([routeShapes, stops]) => {
         if (cancelled) return;
         adapter.setSource(SOURCE_ROUTES, routeShapes);
         adapter.setSource(SOURCE_STOPS, stops);
         setRoutes(routeShapes);
         const bounds = boundsOf(routeShapes) ?? boundsOf(stops);
         if (bounds !== null) adapter.fitBounds(bounds);
-      },
-    );
+      })
+      .catch((failure: unknown) => {
+        if (!cancelled) {
+          setError(`The map data failed to load: ${failure instanceof Error ? failure.message : String(failure)}`);
+        }
+      });
     return () => {
       cancelled = true;
     };
