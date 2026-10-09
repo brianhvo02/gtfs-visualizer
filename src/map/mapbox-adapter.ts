@@ -19,6 +19,7 @@ import {
 
 const STYLE_URL = 'mapbox://styles/mapbox/light-v11';
 const CLICK_TOLERANCE_PX = 6;
+const MAP_LOAD_TIMEOUT_MS = 30_000;
 
 function toValue(value: PaintValue): string | ExpressionSpecification {
   return typeof value === 'string' ? value : ['get', value.property];
@@ -157,22 +158,32 @@ class MapboxAdapter implements MapAdapter {
   }
 }
 
-/** Resolves once the style has loaded; rejects if Mapbox refuses the token. */
+/** Resolves once the style has loaded; rejects if Mapbox refuses the token or loading stalls. */
 export function createMapboxAdapter(container: HTMLElement, token: string): Promise<MapAdapter> {
   mapboxgl.accessToken = token;
   const map = new mapboxgl.Map({container, style: STYLE_URL, center: [-98, 39], zoom: 3});
   return new Promise((resolve, reject) => {
-    let loaded = false;
+    let settled = false;
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      map.remove();
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      fail(new Error('The map took too long to load.'));
+    }, MAP_LOAD_TIMEOUT_MS);
     map.on('error', (event) => {
-      const error = event.error;
-      const status = 'status' in error ? error.status : undefined;
-      if (!loaded && (status === 401 || status === 403)) {
-        map.remove();
-        reject(new MapUnavailableError('invalid_token'));
-      }
+      const error: unknown = event.error;
+      const status =
+        typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+      if (status === 401 || status === 403) fail(new MapUnavailableError('invalid_token'));
     });
     map.on('load', () => {
-      loaded = true;
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       resolve(new MapboxAdapter(map));
     });
   });
