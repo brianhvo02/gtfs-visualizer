@@ -135,7 +135,7 @@ Full timetable grids, trip planning, headway/coverage analytics, `frequencies.tx
 |---|---|
 | CORS / network failure on URL | Explain; offer upload |
 | Not a zip / fatal import issue | Abort, delete temp DB, show reason |
-| Low storage | Pre-check `navigator.storage.estimate()`; warn if free < ~3× zip size. On quota error mid-import, roll back and suggest deleting feeds |
+| Low storage | Pre-check `navigator.storage.estimate()`; warn if free < ~15× zip size (measured ~14× on MBTA). On quota error mid-import, roll back and suggest deleting feeds |
 | Eviction risk | Call `navigator.storage.persist()` after first successful import |
 | Second tab | Web Lock held while DB open; second tab shows "open in another tab — close it or take over" |
 | Unsupported browser (no OPFS / worker) | Full-page notice listing supported browsers |

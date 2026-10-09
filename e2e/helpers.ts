@@ -50,7 +50,7 @@ export async function uploadSample(page: Page): Promise<void> {
     mimeType: 'application/zip',
     buffer: sampleZip(),
   });
-  await expect(page).toHaveURL(/feed=demo-transit/, {timeout: 30_000});
+  await expect(page).toHaveURL(/feed=file-demo-transit/, {timeout: 30_000});
   await expect(page.locator('aside').getByRole('heading', {name: 'Routes'})).toBeVisible();
 }
 

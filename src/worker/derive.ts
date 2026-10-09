@@ -1,4 +1,5 @@
 import {GTFS_TABLES} from '../gtfs/schema.ts';
+import {isValidTimeZone} from '../gtfs/time.ts';
 import type {IssueCollector} from './issues.ts';
 import type {Database} from './sqlite.ts';
 import {asNumber, asString} from './sql-values.ts';
@@ -168,15 +169,6 @@ function buildStopRoutes(db: Database): void {
       FROM stop_routes sr JOIN stops s ON s.stop_id = sr.stop_id
       WHERE s.parent_station IS NOT NULL;
   `);
-}
-
-function isValidTimeZone(timeZone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', {timeZone});
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function buildSummary(db: Database, issues: IssueCollector): void {

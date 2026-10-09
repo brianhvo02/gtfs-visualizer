@@ -21,7 +21,7 @@ test('imports an uploaded feed and highlights a selected route', async ({page}) 
 test('selects a stop from the map and lists departures', async ({page}) => {
   await page.goto('/');
   await uploadSample(page);
-  await page.goto('/?feed=demo-transit&route=R10');
+  await page.goto('/?feed=file-demo-transit&route=R10');
   await page.getByTestId('fake-map').locator('button[data-layer="stops-route"]', {hasText: 'Beatty Airport'}).click();
   await expect(page).toHaveURL(/stop=BEATTY/);
   await expect(page.locator('aside').getByRole('heading', {name: 'Beatty Airport'})).toBeVisible();
@@ -30,7 +30,7 @@ test('selects a stop from the map and lists departures', async ({page}) => {
 test('shows a station’s departures for a date and restores the view on reload', async ({page}) => {
   await page.goto('/');
   await uploadSample(page);
-  await page.goto('/?feed=demo-transit&stop=STN&date=2026-10-12');
+  await page.goto('/?feed=file-demo-transit&stop=STN&date=2026-10-12');
   const sidebar = page.locator('aside');
   await expect(sidebar.getByRole('heading', {name: 'Central Station'})).toBeVisible();
   const rows = sidebar.getByRole('table', {name: 'Departures'}).locator('tbody tr');
@@ -67,7 +67,7 @@ test('explains deep links to missing feeds and routes', async ({page}) => {
   await expect(page).not.toHaveURL(/feed=/);
 
   await uploadSample(page);
-  await page.goto('/?feed=demo-transit&route=NOPE');
+  await page.goto('/?feed=file-demo-transit&route=NOPE');
   await expect(page.getByText('Route not found in this feed.')).toBeVisible();
 });
 

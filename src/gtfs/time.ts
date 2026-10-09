@@ -85,7 +85,7 @@ export function weekdayOf(date: string): Weekday {
   return weekday;
 }
 
-function isValidTimeZone(timeZone: string): boolean {
+export function isValidTimeZone(timeZone: string): boolean {
   try {
     new Intl.DateTimeFormat('en-US', {timeZone});
     return true;
