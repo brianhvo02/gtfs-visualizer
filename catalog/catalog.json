@@ -1,0 +1,8 @@
+[
+  {
+    "id": "mbta",
+    "name": "MBTA",
+    "region": "Boston, MA",
+    "sourceUrl": "https://cdn.mbta.com/MBTA_GTFS.zip"
+  }
+]

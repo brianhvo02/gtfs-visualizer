@@ -1,32 +1,23 @@
-# React + TypeScript + Vite
+# GTFS Visualizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Explore public-transit GTFS feeds in the browser. Feeds are imported into SQLite databases stored in your browser (OPFS) — nothing is uploaded anywhere.
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+cp .env.example .env   # add a Mapbox token
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Without a Mapbox token, run `VITE_MAP_PROVIDER=fake npm run dev` to use a text-only stand-in map.
+
+## Tests
+
+- `npm test` — unit and integration tests (Vitest, sqlite-wasm in Node)
+- `npm run e2e` — end-to-end tests (Playwright, Chromium)
+- `npm run perf -- path/to/feed.zip` — import timing for a real feed
+
+## Deployment
+
+See [docs/deploy.md](docs/deploy.md). Design: [docs/superpowers/specs/2026-10-09-feed-import-and-explorer-design.md](docs/superpowers/specs/2026-10-09-feed-import-and-explorer-design.md).
