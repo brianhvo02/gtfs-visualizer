@@ -106,12 +106,37 @@ test('a rejected key shows a message and asks for the key again', async ({page, 
   await context.unrouteAll();
   await mockCatalog(context, [
     {id: 'keyed-one', name: 'Keyed Feed', place: 'Keyland', zip: sampleZip(), access: KEYED, validKey: 'secret'},
+    {id: 'keyed-two', name: 'Other Keyed', place: 'Keyland', zip: sampleZip(), access: KEYED, validKey: 'secret'},
   ]);
   await page.goto('/');
-  await page.getByLabel('API key for odpt').fill('wrong');
+  await page.getByLabel('API key for odpt').first().fill('wrong');
   await page.getByRole('button', {name: 'Save key and import Keyed Feed', exact: true}).click();
   await expect(page.getByText('The provider rejected this key.')).toBeVisible();
-  await expect(page.getByLabel('API key for odpt')).toBeVisible();
+  await expect(page.getByLabel('API key for odpt')).toHaveCount(2);
+  await expect(page.getByRole('button', {name: 'Forget key for odpt'})).toHaveCount(0);
+});
+
+test('hides Re-import for a saved download-only catalog feed', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {
+      id: 'manual-one',
+      name: 'Manual Feed',
+      place: 'Slowtown',
+      zip: sampleZip(),
+      access: {kind: 'download', pageUrl: 'https://agency.test/page'},
+    },
+  ]);
+  await page.goto('/');
+  await page.getByLabel('Upload downloaded file for Manual Feed').setInputFiles({
+    name: 'm.zip',
+    mimeType: 'application/zip',
+    buffer: sampleZip(),
+  });
+  await expect(page).toHaveURL(/feed=manual-one/, {timeout: 30_000});
+  await page.getByRole('button', {name: 'Change feed'}).click();
+  await expect(page.locator('.feed-list').getByRole('button', {name: 'Manual Feed', exact: true})).toBeVisible();
+  await expect(page.getByRole('button', {name: /Re-import/})).toHaveCount(0);
 });
 
 test('falls back to download instructions when the browser blocks the feed', async ({page, context}) => {
@@ -165,12 +190,13 @@ test('flags a saved catalog feed when the provider has a newer version', async (
   const catalog = await mockCatalog(context, [
     {id: 'demo-catalog', name: 'Demo Catalog Feed', place: 'Testland', zip: sampleZip(), etag: '"v1"'},
   ]);
+  const headSeen = page.waitForRequest((request) => request.method() === 'HEAD' && request.url().includes('demo-catalog.zip'));
   await page.goto('/');
   await page.getByRole('button', {name: 'Import Demo Catalog Feed'}).click();
   await expect(page).toHaveURL(/feed=demo-catalog/, {timeout: 30_000});
   await page.getByRole('button', {name: 'Change feed'}).click();
   await expect(page.locator('.feed-list').getByRole('button', {name: 'Demo Catalog Feed', exact: true})).toBeVisible();
-  await page.waitForTimeout(500);
+  await headSeen;
   await expect(page.getByText('Update available')).toHaveCount(0);
 
   catalog.setEtag('demo-catalog', '"v2"');

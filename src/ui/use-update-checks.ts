@@ -7,6 +7,8 @@ import type {FeedRecord} from '../shared/types.ts';
 const MAX_CONCURRENT = 4;
 /** Results live for the browser session (until reload), keyed by feed id and import time. */
 const sessionCache = new Map<string, UpdateStatus>();
+/** Checks already started this session, so a re-run never issues a second request for the same feed. */
+const started = new Set<string>();
 
 function cacheKey(feed: FeedRecord): string {
   return `${feed.id}:${feed.importedAt}`;
@@ -22,18 +24,21 @@ export function useUpdateChecks(
     if (entries === null) return;
     const byId = new Map(entries.map((entry) => [entry.id, entry]));
     const queue = saved.filter(
-      (feed) => feed.sourceKind === 'catalog' && byId.has(feed.sourceRef) && !sessionCache.has(cacheKey(feed)),
+      (feed) => feed.sourceKind === 'catalog' && byId.has(feed.sourceRef) && !started.has(cacheKey(feed)),
     );
     let cancelled = false;
     const worker = async (): Promise<void> => {
       for (let feed = queue.shift(); feed !== undefined; feed = queue.shift()) {
+        if (cancelled) return;
         const entry = byId.get(feed.sourceRef);
         if (entry === undefined) continue;
+        started.add(cacheKey(feed));
         const access = entry.access;
         const key = access.kind === 'key' ? getKey(access.provider) : null;
         const status = await checkForUpdate(entry, feed, key);
         sessionCache.set(cacheKey(feed), status);
-        if (!cancelled) setTick((n) => n + 1);
+        // Always notify: a re-run skips feeds already started here, so this result must still render.
+        setTick((n) => n + 1);
       }
     };
     for (let i = 0; i < MAX_CONCURRENT; i++) void worker();

@@ -1,5 +1,5 @@
 import * as Comlink from 'comlink';
-import {useCallback, useState} from 'react';
+import {useCallback, useRef, useState, type RefObject} from 'react';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import {STORAGE_HEADROOM} from '../shared/storage.ts';
 import type {FeedRecord, ImportFailure, ImportProgress, ImportSource} from '../shared/types.ts';
@@ -9,6 +9,8 @@ export interface ImportController {
   readonly running: boolean;
   readonly progress: ImportProgress | null;
   readonly failure: ImportFailure | null;
+  /** The failure of the most recent run, readable right after `run` resolves. */
+  readonly failureRef: RefObject<ImportFailure | null>;
   run(source: ImportSource, sizeHint: number | null): Promise<FeedRecord | null>;
 }
 
@@ -23,10 +25,13 @@ export function useImport(service: FeedApi): ImportController {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [failure, setFailure] = useState<ImportFailure | null>(null);
 
+  const failureRef = useRef<ImportFailure | null>(null);
+
   const run = useCallback(
     async (source: ImportSource, sizeHint: number | null): Promise<FeedRecord | null> => {
       setRunning(true);
       setFailure(null);
+      failureRef.current = null;
       setProgress(null);
       const onProgress = Comlink.proxy((next: ImportProgress) => setProgress(next));
       try {
@@ -45,6 +50,7 @@ export function useImport(service: FeedApi): ImportController {
         const result = await service.importFeed(source, onProgress);
         if (!result.ok) {
           setFailure(result);
+          failureRef.current = result;
           return null;
         }
         void requestPersistence();
@@ -64,5 +70,5 @@ export function useImport(service: FeedApi): ImportController {
     [service],
   );
 
-  return {running, progress, failure, run};
+  return {running, progress, failure, failureRef, run};
 }
