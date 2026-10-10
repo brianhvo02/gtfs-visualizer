@@ -209,6 +209,14 @@ describe('translated queries', () => {
     expect(byTrip.get('T20_1')).toBe('Furnace Creek');
   });
 
+  it('translates route names in departures and in a stop’s route list', () => {
+    const departure = getStopDepartures(tdb, 'STN', '20261012', 'fr').find((d) => d.tripId === 'T10_1');
+    expect([departure?.routeShortName, departure?.routeLongName]).toEqual(['10', 'Aéroport - Centre']);
+    const routes = getStopDetail(tdb, 'STN', 'fr')?.routes ?? [];
+    expect(routes.find((r) => r.routeId === 'R10')?.longName).toBe('Aéroport - Centre');
+    expect(routes.find((r) => r.routeId === 'R20')?.longName).toBe('Central - Furnace Creek');
+  });
+
   it('translates agency and publisher names', () => {
     const summary = getFeedSummary(tdb, 'fr');
     expect(summary.agencies[0]?.name).toBe('Régie de transport démo');
@@ -220,6 +228,12 @@ describe('translated queries', () => {
     expect(labels.routes['R10']).toBe('10 · Aéroport - Centre');
     expect(labels.stops['STN']).toBe('Gare Centrale');
     expect(labels.stops['STN_A']).toBe('Quai A');
+  });
+
+  it('builds map labels in the original language when none is chosen', () => {
+    const labels = getMapLabels(tdb, null);
+    expect(labels.routes['R10']).toBe('10 · Airport - Central');
+    expect(labels.stops['STN']).toBe('Central Station');
   });
 
   it('runs untranslated queries on a DB without a translations table', async () => {

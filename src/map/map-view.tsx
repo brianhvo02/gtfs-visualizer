@@ -1,8 +1,9 @@
 import {useEffect, useRef, useState, type ReactElement} from 'react';
 import type {FeatureCollection} from 'geojson';
+import type {FeedApi} from '../db-client/feed-api.ts';
 import type {MapLabels} from '../shared/types.ts';
 import type {ResolvedLanguage} from '../state/resolve-language.ts';
-import type {FeedApi} from '../db-client/feed-api.ts';
+import {useAsync} from '../ui/use-async.ts';
 import {MapUnavailableError, type LightSetting, type MapAdapter} from './adapter.ts';
 import {createMap} from './create-map.ts';
 import {
@@ -66,14 +67,21 @@ export function MapView({
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const [routes, setRoutes] = useState<FeatureCollection | null>(null);
-  const [labels, setLabels] = useState<MapLabels | null>(null);
+  const pending = language === null;
+  const display = language?.display ?? null;
+  const query = language?.query ?? null;
+  // useAsync never returns labels loaded for a previous feed or language; until the current ones
+  // arrive (or if loading fails) tooltips fall back to the features' original names.
+  const labelsState = useAsync(
+    async (): Promise<MapLabels | null> =>
+      pending || feedId === null || query === null ? null : await service.getMapLabels(feedId, query),
+    [service, feedId, query, pending],
+  );
+  const labels = labelsState.status === 'ok' ? labelsState.value : null;
   const labelsRef = useRef<MapLabels | null>(null);
   useEffect(() => {
     labelsRef.current = labels;
   }, [labels]);
-  const pending = language === null;
-  const display = language?.display ?? null;
-  const query = language?.query ?? null;
   const [lightSetting, setLightSetting] = useState<LightSetting>(loadLightSetting);
 
   useEffect(() => {
@@ -167,28 +175,6 @@ export function MapView({
   useEffect(() => {
     if (!pending) adapter?.setLanguage(display);
   }, [adapter, display, pending]);
-
-  useEffect(() => {
-    if (pending) return;
-    if (feedId === null || query === null) {
-      // Clear stale labels when the feed or language no longer has translations.
-      // oxlint-disable-next-line react/set-state-in-effect
-      setLabels(null);
-      return;
-    }
-    let cancelled = false;
-    service.getMapLabels(feedId, query).then(
-      (result) => {
-        if (!cancelled) setLabels(result);
-      },
-      () => {
-        if (!cancelled) setLabels(null);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [service, feedId, query, pending]);
 
   useEffect(() => {
     if (adapter === null) return;

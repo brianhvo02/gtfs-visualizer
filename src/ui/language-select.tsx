@@ -1,7 +1,7 @@
 import type {ReactElement} from 'react';
 import type {FeedLanguages} from '../shared/types.ts';
 import {ORIGINAL_LANGUAGE} from '../state/resolve-language.ts';
-import {languageName} from './format.ts';
+import {languageOptions} from './language-options.ts';
 
 export interface LanguageSelectProps {
   readonly languages: FeedLanguages;
@@ -11,11 +11,8 @@ export interface LanguageSelectProps {
 }
 
 export function LanguageSelect({languages, value, onChange}: LanguageSelectProps): ReactElement | null {
-  const original = languages.originalLanguage;
-  const others = languages.languages.filter(
-    (code) => original === null || code.toLowerCase() !== original.toLowerCase(),
-  );
-  if (others.length === 0) return null;
+  const options = languageOptions(languages);
+  if (options.length === 0) return null;
   return (
     <select
       className="language-select"
@@ -23,12 +20,9 @@ export function LanguageSelect({languages, value, onChange}: LanguageSelectProps
       value={value ?? ORIGINAL_LANGUAGE}
       onChange={(event) => onChange(event.target.value)}
     >
-      <option value={ORIGINAL_LANGUAGE}>
-        {original === null ? 'Feed default' : `${languageName(original)} (original)`}
-      </option>
-      {others.map((code) => (
-        <option key={code} value={code}>
-          {languageName(code)}
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
         </option>
       ))}
     </select>

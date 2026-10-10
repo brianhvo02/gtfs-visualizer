@@ -130,6 +130,17 @@ test('keeps the route detail view mounted when the language changes', async ({pa
   await expect(sidebar.getByRole('button', {name: '← All routes'})).toBeVisible();
 });
 
+test('keeps a language the feed lacks in the URL while showing original names', async ({page}) => {
+  await page.goto('/');
+  await uploadSample(page);
+  await page.goto('/?feed=file-demo-transit&lang=fr');
+  const sidebar = page.locator('aside');
+  await sidebar.getByRole('button', {name: '10 · Airport - Central'}).click();
+  await expect(page).toHaveURL(/route=R10/);
+  await expect(page).toHaveURL(/lang=fr/);
+  await expect(sidebar.getByRole('heading', {name: '10 · Airport - Central'})).toBeVisible();
+});
+
 test('has no language selector for a feed without translations', async ({page}) => {
   await page.goto('/');
   await uploadSample(page);
