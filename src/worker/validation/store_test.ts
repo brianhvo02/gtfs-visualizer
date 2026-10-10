@@ -80,4 +80,15 @@ describe('validation store', () => {
     expect(groups).toContainEqual(expect.objectContaining({code: 'invalid_value', count: 1}));
     expect(getImportIssues(db, 'invalid_value')).toHaveLength(1);
   });
+
+  it('groups an import code with mixed severities into one group', async () => {
+    const {db} = await loadSampleDb();
+    db.exec(`INSERT INTO import_issues (severity, file, line, column_name, code, message) VALUES
+      ('warning', 'stops.txt', 2, 'a', 'invalid_value', 'w'),
+      ('error', 'stops.txt', 3, 'b', 'invalid_value', 'e'),
+      ('warning', 'stops.txt', 4, 'c', 'invalid_value', 'w2')`);
+    writeValidationResults(db, [], AT);
+    const groups = (getValidationSummary(db)?.importIssues ?? []).filter((g) => g.code === 'invalid_value');
+    expect(groups).toEqual([{code: 'invalid_value', severity: 'error', count: 3}]);
+  });
 });

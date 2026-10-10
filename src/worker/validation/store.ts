@@ -147,11 +147,11 @@ export function getValidationSummary(db: Database): ValidationSummary | null {
   }
   const importIssues = db
     .selectObjects(
-      "SELECT code, severity, count(*) AS n FROM import_issues WHERE code != 'suppressed' GROUP BY code, severity ORDER BY min(rowid)",
+      "SELECT code, max(CASE severity WHEN 'fatal' THEN 3 WHEN 'error' THEN 2 ELSE 1 END) AS rank, count(*) AS n FROM import_issues WHERE code != 'suppressed' GROUP BY code ORDER BY min(rowid)",
     )
     .map((row) => ({
       code: (asString(row['code']) ?? '') as IssueCode,
-      severity: (asString(row['severity']) ?? 'warning') as IssueSeverity,
+      severity: (['warning', 'warning', 'error', 'fatal'][asNumber(row['rank']) ?? 1] ?? 'warning') as IssueSeverity,
       count: asNumber(row['n']) ?? 0,
     }));
   return {counts: countsOf(db), rules, importIssues};
