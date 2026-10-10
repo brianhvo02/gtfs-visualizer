@@ -1,10 +1,10 @@
 [
-  {"mdbId": "mdb-437"},
   {
     "mdbId": "mdb-516",
-    "name": "NYC Subway (MTA New York City Transit)",
+    "name": "NYCT Subway",
     "place": "New York City, New York, US",
-    "license": "https://www.mta.info/developers/terms-and-conditions"
+    "originalUrl": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip",
+    "license": "https://data.ny.gov/Transportation/MTA-General-Transit-Feed-Specification-GTFS-Static/fgm6-ccue/about_data"
   },
   {
     "id": "bay-area-511",

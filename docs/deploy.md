@@ -22,7 +22,7 @@ Create a public token in your Mapbox account with **URL restrictions** set to th
 
 Curated entries come in two forms:
 
-- Reference with overrides: `{"mdbId": "mdb-437"}` plus any of `name`, `place`, `url`, `originalUrl`, `access`, `license`, `bbox` to override what Mobility Database says.
+- Reference with overrides: `{"mdbId": "mdb-516"}` plus any of `name`, `place`, `url`, `originalUrl`, `access`, `license`, `bbox` to override what Mobility Database says.
 - Full entry: `id`, `name`, `place`, `url`, `access`, and optionally `originalUrl`, `license`, `bbox`. Curated `id`s are lowercase letters, digits, and dashes. (Ids that come from Mobility Database may also contain uppercase letters and underscores.)
 
 `access` says how a visitor gets the zip:
