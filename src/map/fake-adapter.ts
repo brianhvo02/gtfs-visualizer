@@ -13,6 +13,7 @@ interface FakeState {
   readonly opacity: Record<string, number>;
   fitBoundsCount: number;
   lastBounds: Bounds | null;
+  language: string | null;
 }
 
 interface ClickEntry {
@@ -26,7 +27,7 @@ class FakeMapAdapter implements MapAdapter {
   private readonly sources = new Map<string, FeatureCollection>();
   private readonly layers: LayerSpec[] = [];
   private readonly clickHandlers = new Set<ClickEntry>();
-  private readonly state: FakeState = {filters: {}, opacity: {}, fitBoundsCount: 0, lastBounds: null};
+  private readonly state: FakeState = {filters: {}, opacity: {}, fitBoundsCount: 0, lastBounds: null, language: null};
 
   constructor(container: HTMLElement) {
     this.root = document.createElement('div');
@@ -67,6 +68,11 @@ class FakeMapAdapter implements MapAdapter {
   fitBounds(bounds: Bounds): void {
     this.state.fitBoundsCount++;
     this.state.lastBounds = bounds;
+    this.render();
+  }
+
+  setLanguage(lang: string | null): void {
+    this.state.language = lang;
     this.render();
   }
 

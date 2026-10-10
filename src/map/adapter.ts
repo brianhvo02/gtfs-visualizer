@@ -52,6 +52,8 @@ export interface MapAdapter {
   setFilter(layerId: string, filter: LayerFilter): void;
   setOpacity(layerId: string, opacity: number): void;
   fitBounds(bounds: Bounds): void;
+  /** Sets the base-map label language; null restores the map's default labels. */
+  setLanguage(lang: string | null): void;
   onFeatureClick(layerIds: readonly string[], handler: (feature: MapFeature) => void): () => void;
   onFeatureHover(
     layerIds: readonly string[],

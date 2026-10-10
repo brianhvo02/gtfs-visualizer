@@ -89,8 +89,10 @@ test('shows a feed in a chosen language and keeps it on reload', async ({page}) 
   await uploadTranslatedSample(page);
   const language = page.getByRole('combobox', {name: 'Language'});
   await expect(language).toHaveValue('original');
+  await expect.poll(async () => (await fakeMapState(page)).language).toBe('en');
   await language.selectOption('fr');
   await expect(page).toHaveURL(/lang=fr/);
+  await expect.poll(async () => (await fakeMapState(page)).language).toBe('fr');
   const sidebar = page.locator('aside');
   await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();
   await page.reload();

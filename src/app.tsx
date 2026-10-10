@@ -3,7 +3,7 @@ import type {FeedApi} from './db-client/feed-api.ts';
 import {host} from './db-client/host.ts';
 import {MapView} from './map/map-view.tsx';
 import type {FeedLanguages, FeedRecord} from './shared/types.ts';
-import {ORIGINAL_LANGUAGE, resolveLanguage} from './state/resolve-language.ts';
+import {ORIGINAL_LANGUAGE, resolveLanguage, type ResolvedLanguage} from './state/resolve-language.ts';
 import {useSelection, type Selection, type UpdateSelection} from './state/url-state.ts';
 import {ErrorMessage} from './ui/error-message.tsx';
 import {FeedInfo} from './ui/feed-info.tsx';
@@ -18,6 +18,7 @@ import {useAsync} from './ui/use-async.ts';
 const CATALOG_BASE_URL = import.meta.env.VITE_CATALOG_BASE_URL || null;
 
 const NO_STOPS: readonly string[] = [];
+const NO_LANGUAGE: ResolvedLanguage = {display: null, query: null};
 
 export function App(): ReactElement {
   const state = useSyncExternalStore(host.subscribe, host.getState);
@@ -47,7 +48,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
     [service, activeFeedId],
   );
   const feedLanguages: FeedLanguages | null = languages.status === 'ok' ? languages.value : null;
-  const resolved =
+  const resolved: ResolvedLanguage | null =
     feedLanguages === null ? null : resolveLanguage(selection.lang, navigator.languages, feedLanguages);
 
   useEffect(() => {
@@ -123,6 +124,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
       </aside>
       <MapView
         service={service}
+        language={resolved ?? NO_LANGUAGE}
         feedId={activeFeed?.id ?? null}
         selectedRouteId={selection.route}
         selectedStopId={selection.stop}

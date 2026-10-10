@@ -100,6 +100,10 @@ class MapboxAdapter implements MapAdapter {
     if (layer?.type === 'circle') this.map.setPaintProperty(layerId, 'circle-opacity', opacity);
   }
 
+  setLanguage(lang: string | null): void {
+    this.map.setLanguage(lang ?? undefined);
+  }
+
   fitBounds(bounds: Bounds): void {
     this.map.fitBounds(
       [

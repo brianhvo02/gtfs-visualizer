@@ -68,6 +68,7 @@ export interface FakeMapState {
   readonly filters: Record<string, unknown>;
   readonly opacity: Record<string, number>;
   readonly fitBoundsCount: number;
+  readonly language: string | null;
 }
 
 export async function fakeMapState(page: Page): Promise<FakeMapState> {

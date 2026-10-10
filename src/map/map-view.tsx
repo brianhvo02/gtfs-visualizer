@@ -1,5 +1,7 @@
 import {useEffect, useRef, useState, type ReactElement} from 'react';
 import type {FeatureCollection} from 'geojson';
+import type {MapLabels} from '../shared/types.ts';
+import type {ResolvedLanguage} from '../state/resolve-language.ts';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import {MapUnavailableError, type MapAdapter} from './adapter.ts';
 import {createMap} from './create-map.ts';
@@ -16,6 +18,7 @@ import {
 export interface MapViewProps {
   readonly service: FeedApi;
   readonly feedId: string | null;
+  readonly language: ResolvedLanguage;
   readonly selectedRouteId: string | null;
   readonly selectedStopId: string | null;
   readonly routeStopIds: readonly string[];
@@ -41,6 +44,7 @@ function mapErrorMessage(error: unknown): string {
 export function MapView({
   service,
   feedId,
+  language,
   selectedRouteId,
   selectedStopId,
   routeStopIds,
@@ -52,6 +56,12 @@ export function MapView({
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const [routes, setRoutes] = useState<FeatureCollection | null>(null);
+  const [labels, setLabels] = useState<MapLabels | null>(null);
+  const labelsRef = useRef<MapLabels | null>(null);
+  useEffect(() => {
+    labelsRef.current = labels;
+  }, [labels]);
+  const {display, query} = language;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -91,8 +101,15 @@ export function MapView({
       }
     });
     const offHover = adapter.onFeatureHover(CLICK_LAYERS, (feature, point) => {
-      const name = feature?.properties['name'];
-      setHover(typeof name === 'string' ? {name, x: point.x, y: point.y} : null);
+      const {stopId, routeId, name} = feature?.properties ?? {};
+      const translated =
+        typeof stopId === 'string'
+          ? labelsRef.current?.stops[stopId]
+          : typeof routeId === 'string'
+            ? labelsRef.current?.routes[routeId]
+            : undefined;
+      const text = translated ?? name;
+      setHover(typeof text === 'string' ? {name: text, x: point.x, y: point.y} : null);
     });
     return () => {
       offClick();
@@ -129,6 +146,31 @@ export function MapView({
       cancelled = true;
     };
   }, [adapter, service, feedId]);
+
+  useEffect(() => {
+    adapter?.setLanguage(display);
+  }, [adapter, display]);
+
+  useEffect(() => {
+    if (feedId === null || query === null) {
+      // Clear stale labels when the feed or language no longer has translations.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setLabels(null);
+      return;
+    }
+    let cancelled = false;
+    service.getMapLabels(feedId, query).then(
+      (result) => {
+        if (!cancelled) setLabels(result);
+      },
+      () => {
+        if (!cancelled) setLabels(null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [service, feedId, query]);
 
   useEffect(() => {
     if (adapter === null) return;
