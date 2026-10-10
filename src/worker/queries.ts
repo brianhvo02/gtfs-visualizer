@@ -62,7 +62,8 @@ function compareRoutes(a: RouteSummary, b: RouteSummary): number {
     if (b.sortOrder === null) return -1;
     return a.sortOrder - b.sortOrder;
   }
-  return routeLabel(a).localeCompare(routeLabel(b), undefined, {numeric: true});
+  // By id rather than display name, so the order stays the same in every language.
+  return a.routeId.localeCompare(b.routeId, undefined, {numeric: true});
 }
 
 export function getRoutes(db: Database, lang: string | null): RouteSummary[] {

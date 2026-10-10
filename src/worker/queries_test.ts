@@ -33,6 +33,29 @@ describe('queries', () => {
     expect(routes[2]?.category).toBe('ferry');
   });
 
+  it('orders routes by route_id (numeric-aware) rather than by their display names', async () => {
+    const routes = [
+      'route_id,agency_id,route_short_name,route_long_name,route_type',
+      'R10,DTA,Z,Zebra,3',
+      'R20,DTA,M,Middle,3',
+      'R30,DTA,A,Alpha,3',
+      'R9,DTA,Q,Quebec,3',
+    ].join('\n');
+    const {db: byId} = await loadSampleDb(withFile('routes.txt', `${routes}\n`));
+    expect(getRoutes(byId, null).map((r) => r.routeId)).toEqual(['R9', 'R10', 'R20', 'R30']);
+  });
+
+  it('keeps route_sort_order ahead of route_id', async () => {
+    const routes = [
+      'route_id,agency_id,route_short_name,route_long_name,route_type,route_sort_order',
+      'R10,DTA,10,Airport - Central,3,',
+      'R20,DTA,20,Central - Furnace Creek,3,',
+      'R30,DTA,30,Harbor Ferry,4,1',
+    ].join('\n');
+    const {db: sorted} = await loadSampleDb(withFile('routes.txt', `${routes}\n`));
+    expect(getRoutes(sorted, null).map((r) => r.routeId)).toEqual(['R30', 'R10', 'R20']);
+  });
+
   it('returns route lines as GeoJSON with display properties', () => {
     const shapes = getRouteShapesGeoJSON(db);
     expect(shapes.features.map((f) => f.properties)).toEqual([
