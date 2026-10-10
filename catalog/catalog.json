@@ -15,6 +15,30 @@
     "license": "https://511.org/sites/default/files/2026-04/511_Data_Agreement_Final_2026.pdf"
   },
   {
+    "id": "hk-td-pt-en",
+    "name": "Hong Kong Transport Department — Public Transport (English)",
+    "place": "Hong Kong",
+    "url": "https://static.data.gov.hk/td/pt-headway-en/gtfs.zip",
+    "access": {"kind": "direct"},
+    "license": "https://data.gov.hk/en/terms-and-conditions"
+  },
+  {
+    "id": "hk-td-pt-tc",
+    "name": "香港運輸署 — 公共交通（繁體中文）",
+    "place": "Hong Kong",
+    "url": "https://static.data.gov.hk/td/pt-headway-tc/gtfs.zip",
+    "access": {"kind": "direct"},
+    "license": "https://data.gov.hk/tc/terms-and-conditions"
+  },
+  {
+    "id": "hk-td-pt-sc",
+    "name": "香港运输署 — 公共交通（简体中文）",
+    "place": "Hong Kong",
+    "url": "https://static.data.gov.hk/td/pt-headway-sc/gtfs.zip",
+    "access": {"kind": "direct"},
+    "license": "https://data.gov.hk/sc/terms-and-conditions"
+  },
+  {
     "id": "tokyo-metro",
     "name": "Tokyo Metro",
     "place": "Tokyo, Japan",
