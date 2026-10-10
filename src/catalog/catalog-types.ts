@@ -101,9 +101,14 @@ export function parseAccess(json: unknown, where: string): Access {
   }
 }
 
-function parseFullEntry(item: Record<string, unknown>, where: string, featured: boolean): CatalogEntry {
+function parseFullEntry(
+  item: Record<string, unknown>,
+  where: string,
+  featured: boolean,
+  checkId: boolean,
+): CatalogEntry {
   const id = requireString(item, 'id', where);
-  if (!ID_PATTERN.test(id)) {
+  if (checkId && !ID_PATTERN.test(id)) {
     throw new Error(`${where}: "id" "${id}" is invalid (use lowercase letters, digits, and dashes)`);
   }
   return {
@@ -138,7 +143,7 @@ export function parseCuratedCatalog(json: unknown): CuratedEntry[] {
       if (item['bbox'] !== undefined) overrides.bbox = parseBbox(item['bbox'], where);
       return {mdbId, overrides};
     }
-    const entry = parseFullEntry(item, where, true);
+    const entry = parseFullEntry(item, where, true, true);
     if (seen.has(entry.id)) throw new Error(`${where}: duplicate id "${entry.id}"`);
     seen.add(entry.id);
     return {entry};
@@ -153,7 +158,7 @@ export function parseCatalogSnapshot(json: unknown): CatalogSnapshot {
   const entries = rawEntries.map((raw: unknown, index): CatalogEntry => {
     const where = `catalog.json entry ${index}`;
     const item = requireRecord(raw, where);
-    const entry = parseFullEntry(item, where, item['featured'] === true);
+    const entry = parseFullEntry(item, where, item['featured'] === true, false);
     return {...entry, viaMobilityDatabase: item['viaMobilityDatabase'] === true};
   });
   return {generatedAt, entries};

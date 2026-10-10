@@ -1,8 +1,12 @@
 [
+  {"mdbId": "mdb-437"},
+  {"mdbId": "mdb-3520"},
   {
-    "id": "mbta",
-    "name": "MBTA",
-    "region": "Boston, MA",
-    "sourceUrl": "https://cdn.mbta.com/MBTA_GTFS.zip"
+    "id": "tokyo-metro",
+    "name": "Tokyo Metro",
+    "place": "Tokyo, Japan",
+    "url": "https://api.odpt.org/api/v4/files/TokyoMetro/data/TokyoMetro-Train-GTFS.zip",
+    "access": {"kind": "key", "provider": "odpt", "signupUrl": "https://developer.odpt.org/", "queryParam": "acl:consumerKey"},
+    "license": "https://developer.odpt.org/terms/data_basic_license.html"
   }
 ]

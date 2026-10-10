@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "node scripts/catalog/sync.ts --if-missing && vite",
+    "catalog:sync": "node scripts/catalog/sync.ts",
+    "build": "npm run catalog:sync && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
