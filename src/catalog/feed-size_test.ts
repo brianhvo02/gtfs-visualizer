@@ -13,6 +13,7 @@ const direct: CatalogEntry = {
   bbox: null,
   featured: false,
   viaMobilityDatabase: false,
+  official: true,
 };
 
 const keyed: CatalogEntry = {

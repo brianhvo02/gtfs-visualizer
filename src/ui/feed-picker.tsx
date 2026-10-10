@@ -43,6 +43,7 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
   const featured = useMemo(() => entries.filter((entry) => entry.featured), [entries]);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [officialOnly, setOfficialOnly] = useState(false);
   const [keysVersion, setKeysVersion] = useState(0);
   const [attempted, setAttempted] = useState<string | null>(null);
   useEffect(() => {
@@ -50,7 +51,10 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
     return () => clearTimeout(timer);
   }, [query]);
   // Featured entries are always listed above, so search only the rest and the counts match the rows shown.
-  const unfeatured = useMemo(() => entries.filter((entry) => !entry.featured), [entries]);
+  const unfeatured = useMemo(
+    () => entries.filter((entry) => !entry.featured && (!officialOnly || entry.official)),
+    [entries, officialOnly],
+  );
   const search = useMemo(() => searchCatalog(unfeatured, debounced), [unfeatured, debounced]);
   const searching = debounced.trim() !== '';
   const updates = useUpdateChecks(saved, catalog.status === 'ok' ? entries : null);
@@ -175,6 +179,10 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
+          <label className="checkbox-label">
+            <input type="checkbox" checked={officialOnly} onChange={(event) => setOfficialOnly(event.target.checked)} />
+            Official feeds only
+          </label>
           {searching && (
             <>
               <ul className="feed-list">{search.results.map(row)}</ul>

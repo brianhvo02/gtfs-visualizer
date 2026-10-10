@@ -10,12 +10,12 @@ export function mergeCatalog(mdb: readonly CatalogEntry[], curated: readonly Cur
     if ('mdbId' in item) {
       const base = byId.get(item.mdbId);
       if (base === undefined) throw new Error(`${where}: unknown mdbId "${item.mdbId}"`);
-      resolved = {...base, ...item.overrides, featured: true};
+      resolved = {...base, ...item.overrides, featured: true, official: true};
     } else {
       if (byId.has(item.entry.id)) {
         throw new Error(`${where}: id "${item.entry.id}" is already a Mobility Database feed`);
       }
-      resolved = {...item.entry, featured: true};
+      resolved = {...item.entry, featured: true, official: true};
     }
     if (featuredIds.has(resolved.id)) throw new Error(`${where}: duplicate id "${resolved.id}"`);
     featuredIds.add(resolved.id);

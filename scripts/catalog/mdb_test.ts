@@ -22,6 +22,13 @@ function one(overrides: Record<string, string>) {
 }
 
 describe('mapMobilityDatabaseRows', () => {
+  it('marks feeds official only when Mobility Database says so', () => {
+    expect(one({is_official: 'True'}).official).toBe(true);
+    expect(one({is_official: 'true'}).official).toBe(true);
+    expect(one({is_official: 'False'}).official).toBe(false);
+    expect(one({is_official: ''}).official).toBe(false);
+  });
+
   it('drops inactive, deprecated, and non-gtfs rows; keeps empty status', () => {
     const {entries} = mapMobilityDatabaseRows([
       row({id: 'a', status: 'inactive'}),

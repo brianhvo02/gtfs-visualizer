@@ -165,6 +165,11 @@ export function CatalogRow({entry, busy, onImport, failure, keysVersion, onKeysC
       <span>{entry.name}</span>
       <span className="muted">{entry.place}</span>
       <span className="badge badge-neutral">{BADGES[access.kind]}</span>
+      {!entry.official && (
+        <span className="badge badge-community" title="Not published by the agency; built or republished by a third party">
+          Community feed
+        </span>
+      )}
       {actions}
     </li>
   );

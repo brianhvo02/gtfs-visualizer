@@ -13,6 +13,7 @@ const entry: CatalogEntry = {
   bbox: null,
   featured: false,
   viaMobilityDatabase: false,
+  official: true,
 };
 
 describe('probeFeed', () => {

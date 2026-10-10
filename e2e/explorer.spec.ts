@@ -185,6 +185,28 @@ test('searches the whole catalog across scripts', async ({page, context}) => {
   await expect(page.getByText(/Showing/)).toHaveCount(0);
 });
 
+test('labels community feeds and can hide them from search', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {id: 'agency', name: 'Harbor Agency Transit', place: 'Harbor', zip: sampleZip(), featured: false},
+    {id: 'community', name: 'Harbor Community Rail', place: 'Harbor', zip: sampleZip(), featured: false, official: false},
+  ]);
+  await page.goto('/');
+  await page.getByRole('searchbox', {name: 'Search feeds'}).fill('harbor');
+  const communityRow = page.locator('li', {has: page.getByRole('button', {name: 'Import Harbor Community Rail'})});
+  await expect(communityRow.getByText('Community feed')).toBeVisible();
+  const agencyRow = page.locator('li', {has: page.getByRole('button', {name: 'Import Harbor Agency Transit'})});
+  await expect(agencyRow.getByText('Community feed')).toHaveCount(0);
+
+  const officialOnly = page.getByRole('checkbox', {name: 'Official feeds only'});
+  await expect(officialOnly).not.toBeChecked();
+  await officialOnly.check();
+  await expect(page.getByRole('button', {name: 'Import Harbor Community Rail'})).toHaveCount(0);
+  await expect(page.getByRole('button', {name: 'Import Harbor Agency Transit'})).toBeVisible();
+  await officialOnly.uncheck();
+  await expect(page.getByRole('button', {name: 'Import Harbor Community Rail'})).toBeVisible();
+});
+
 test('a query matching only a featured feed shows no results note', async ({page, context}) => {
   await context.unrouteAll();
   await mockCatalog(context, [

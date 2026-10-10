@@ -15,6 +15,7 @@ const SNAPSHOT = {
       bbox: null,
       featured: true,
       viaMobilityDatabase: false,
+      official: true,
     },
   ],
 };

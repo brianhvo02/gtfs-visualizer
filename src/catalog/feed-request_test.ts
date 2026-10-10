@@ -14,6 +14,7 @@ function entry(access: Access, url = 'https://api.test/f.zip'): CatalogEntry {
     bbox: null,
     featured: false,
     viaMobilityDatabase: false,
+    official: true,
   };
 }
 

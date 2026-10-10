@@ -17,6 +17,7 @@ export const MDB_REQUIRED_COLUMNS: readonly string[] = [
   'urls.api_key_parameter_name',
   'urls.latest',
   'urls.license',
+  'is_official',
   'location.bounding_box.minimum_latitude',
   'location.bounding_box.maximum_latitude',
   'location.bounding_box.minimum_longitude',
@@ -110,6 +111,7 @@ function mapRow(row: Record<string, string>): CatalogEntry | null {
     bbox: bboxOf(row),
     featured: false,
     viaMobilityDatabase: via,
+    official: /^true$/i.test(row['is_official'] ?? ''),
   };
 }
 

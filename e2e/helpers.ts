@@ -25,6 +25,8 @@ export interface MockCatalogEntry {
   readonly zip: Buffer;
   readonly access?: MockAccess;
   readonly featured?: boolean;
+  /** Defaults to true. */
+  readonly official?: boolean;
   /** Served as the ETag on GET. */
   readonly etag?: string;
   /** The zip request is aborted, as a browser does when CORS blocks it. */
@@ -58,6 +60,7 @@ export async function mockCatalog(
       bbox: null,
       featured: e.featured ?? true,
       viaMobilityDatabase: false,
+      official: e.official ?? true,
     })),
   };
   await context.route('**/catalog.json', (route) => route.fulfill({json: snapshot}));

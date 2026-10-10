@@ -14,6 +14,7 @@ function entry(id: string, name: string, place: string): CatalogEntry {
     bbox: null,
     featured: false,
     viaMobilityDatabase: false,
+    official: true,
   };
 }
 

@@ -22,6 +22,7 @@ describe('parseCuratedCatalog', () => {
           bbox: null,
           featured: true,
           viaMobilityDatabase: false,
+          official: true,
           access: {
             kind: 'key',
             provider: 'odpt',
@@ -61,6 +62,7 @@ describe('parseCatalogSnapshot', () => {
     bbox: [1, 2, 3, 4],
     featured: false,
     viaMobilityDatabase: true,
+    official: true,
   };
   it('round-trips a snapshot', () => {
     const snapshot = {generatedAt: '2026-10-10T00:00:00Z', entries: [entry]};

@@ -22,6 +22,7 @@ function catalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
     bbox: null,
     featured: false,
     viaMobilityDatabase: true,
+    official: true,
     ...overrides,
   };
 }

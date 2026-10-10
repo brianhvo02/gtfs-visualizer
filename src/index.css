@@ -59,7 +59,9 @@ input[type='search'], input[type='url'], select { width: 100%; padding: 6px 8px;
 .feed-list li { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .feed-open { background: none; border: none; padding: 0; color: var(--accent); font-weight: 600; text-align: left; }
 .row-actions { display: flex; gap: 6px; }
-.badge-neutral { background: var(--border); color: var(--text); }
+.badge.badge-neutral { background: var(--border); color: var(--text); }
+.badge.badge-community { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
+.checkbox-label { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 0.9rem; }
 .row-expanded { display: grid; gap: 6px; margin-top: 4px; }
 .key-form input[type='password'] { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
 .data-line { font-size: 0.9rem; }

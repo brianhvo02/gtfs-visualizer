@@ -5,7 +5,7 @@ import {mergeCatalog} from './merge.ts';
 function entry(id: string, name: string): CatalogEntry {
   return {
     id, name, place: 'P', url: `https://x/${id}.zip`, originalUrl: null, access: {kind: 'direct'},
-    license: null, bbox: null, featured: false, viaMobilityDatabase: true,
+    license: null, bbox: null, featured: false, viaMobilityDatabase: true, official: false,
   };
 }
 
@@ -16,6 +16,16 @@ describe('mergeCatalog', () => {
     const out = mergeCatalog(mdb, [{mdbId: 'mdb-2', overrides: {}}, {mdbId: 'mdb-3', overrides: {}}]);
     expect(out.map((e) => e.id)).toEqual(['mdb-2', 'mdb-3', 'mdb-1']);
     expect(out.map((e) => e.featured)).toEqual([true, true, false]);
+  });
+
+  it('treats every featured feed as official', () => {
+    const out = mergeCatalog(mdb, [{mdbId: 'mdb-1', overrides: {}}, {entry: {...entry('mine', 'Mine'), official: false}}]);
+    expect(out.map((e) => [e.id, e.official])).toEqual([
+      ['mdb-1', true],
+      ['mine', true],
+      ['mdb-2', false],
+      ['mdb-3', false],
+    ]);
   });
 
   it('applies overrides', () => {

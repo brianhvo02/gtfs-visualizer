@@ -15,6 +15,7 @@ function entry(access: Access = {kind: 'direct'}): CatalogEntry {
     bbox: null,
     featured: false,
     viaMobilityDatabase: false,
+    official: true,
   };
 }
 

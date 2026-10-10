@@ -25,6 +25,8 @@ export interface CatalogEntry {
   readonly bbox: Bbox | null;
   readonly featured: boolean;
   readonly viaMobilityDatabase: boolean;
+  /** Published by the agency itself (Mobility Database's `is_official`); featured feeds always are. */
+  readonly official: boolean;
 }
 
 export interface CatalogSnapshot {
@@ -32,7 +34,7 @@ export interface CatalogSnapshot {
   readonly entries: readonly CatalogEntry[];
 }
 
-type OverrideFields = Partial<Omit<CatalogEntry, 'id' | 'featured' | 'viaMobilityDatabase'>>;
+type OverrideFields = Partial<Omit<CatalogEntry, 'id' | 'featured' | 'viaMobilityDatabase' | 'official'>>;
 type Mutable<T> = {-readonly [K in keyof T]: T[K]};
 
 export type CuratedEntry =
@@ -125,6 +127,7 @@ function parseFullEntry(
     bbox: parseBbox(item['bbox'], where),
     featured,
     viaMobilityDatabase: false,
+    official: featured,
   };
 }
 
@@ -165,7 +168,7 @@ export function parseCatalogSnapshot(json: unknown): CatalogSnapshot {
     const entry = parseFullEntry(item, where, item['featured'] === true, false);
     if (seen.has(entry.id)) throw new Error(`${where}: duplicate id "${entry.id}"`);
     seen.add(entry.id);
-    return {...entry, viaMobilityDatabase: item['viaMobilityDatabase'] === true};
+    return {...entry, viaMobilityDatabase: item['viaMobilityDatabase'] === true, official: item['official'] === true};
   });
   return {generatedAt, entries};
 }
