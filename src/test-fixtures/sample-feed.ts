@@ -114,3 +114,40 @@ export const TRANSLATED_FEED: Readonly<Record<string, string>> = withFile(
   'translations.txt',
   SAMPLE_TRANSLATIONS,
 );
+
+/** SAMPLE_FEED with its defects fixed: validates with zero issues. */
+export const VALID_FEED: Readonly<Record<string, string>> = {
+  ...SAMPLE_FEED,
+  'trips.txt': lines(
+    'route_id,service_id,trip_id,trip_headsign,direction_id,shape_id',
+    'R10,WKDY,T10_1,Central,0,SH10',
+    'R10,WKDY,T10_2,Central,0,SH10',
+    'R10,WKDY,T10_3,Airport,1,SH10',
+    'R20,WKDY,T20_1,Furnace Creek,0,',
+    'R20,WKND,T20_2,Furnace Creek,0,',
+    'R30,WKDY,T30_1,Central,0,',
+  ),
+  'stop_times.txt': lines(
+    'trip_id,arrival_time,departure_time,stop_id,stop_sequence',
+    'T10_1,08:00:00,08:00:00,BEATTY,1',
+    'T10_1,,,NADAV,2',
+    'T10_1,09:00:00,09:00:00,STN_A,3',
+    'T10_2,23:50:00,23:50:00,BEATTY,1',
+    'T10_2,24:05:00,24:05:00,NADAV,2',
+    'T10_2,25:05:00,25:05:00,STN_A,3',
+    'T10_3,9:00:00,9:00:00,STN_A,1',
+    'T10_3,09:50:00,09:50:00,NADAV,2',
+    'T10_3,10:00:00,10:00:00,BEATTY,3',
+    'T20_1,10:00:00,10:00:00,STN_A,1',
+    'T20_1,11:00:00,11:00:00,FUR,2',
+    'T20_2,12:00:00,12:00:00,STN_A,1',
+    'T20_2,13:00:00,13:00:00,FUR,2',
+    'T30_1,14:00:00,14:00:00,FUR,1',
+    'T30_1,16:00:00,16:00:00,STN_A,2',
+  ),
+  'calendar.txt': lines(
+    'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date',
+    'WKDY,1,1,1,1,1,0,0,20260101,20991231',
+    'WKND,0,0,0,0,0,1,1,20260101,20991231',
+  ),
+};

@@ -58,7 +58,7 @@ CREATE TABLE validation_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
 - **Cap:** at most 200 stored rows per rule; `validation_rules.total` keeps the real count.
-- **Atomic results:** a run writes `validation_issues_next` and `validation_rules_next`. On completion, one transaction drops the old tables, renames the `_next` tables into place, recreates the indexes, and writes `validation_meta`. Readers never see partial results. A run that stops early (tab closed, worker crash, feed switched) leaves only `_next` tables, which the next run drops before starting.
+- **Atomic results:** each rule stores at most 200 rows, so a run buffers its results in memory and, after the last check, writes them in one transaction (`writeValidationResults`) that replaces the old rows and writes `validation_meta`. Readers never see partial results. A run that stops early (tab closed, worker crash, feed switched) writes nothing, so there is nothing to clean up.
 - **Severities:** `error` = data is broken or dropped; `warning` = suspicious but usable; `info` = low stakes. `fatal` stays specific to import.
 - **Versioning:** `RULESET_VERSION` (integer, `src/shared/validation.ts`). Results are current when `validation_meta.ruleset_version` equals it. Any change to rules, thresholds, or messages bumps it, which re-validates each feed the next time it is opened.
 
@@ -71,12 +71,17 @@ CREATE TABLE validation_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 | File | Responsibility |
 |---|---|
 | `src/shared/validation.ts` | `RuleId` union, `RULESET_VERSION`, `RULES` metadata (id, severity, title, one-line explanation), `ValidationIssue`, `ValidationStatus`, `ValidationProgress`, `ValidationSummary`, `ValidationFilter` types |
-| `src/worker/validation/runner.ts` | Creates `_next` tables, runs rules in order, capped `emit`, `checkpoint`, cancellation, per-rule error capture, final swap |
+| `src/worker/validation/runner.ts` | Runs checks in order, capped `emit`, `checkpoint`, cancellation, per-check error capture, buffers results and writes them in one transaction |
+| `src/worker/validation/store.ts` | `writeValidationResults` and the read queries |
+| `src/worker/validation/names.ts` | Route and stop name lookup for issue messages |
 | `src/worker/validation/geo.ts` | Haversine distance; point-to-polyline distance using a local equirectangular projection |
-| `src/worker/validation/rules/references.ts` | Broken-reference rules |
-| `src/worker/validation/rules/schedule.ts` | Schedule rules |
-| `src/worker/validation/rules/geography.ts` | Coordinate and shape rules |
-| `src/worker/validation/rules/feed.ts` | Feed-level rules |
+| `src/worker/validation/rules/references.ts` | Broken-reference checks |
+| `src/worker/validation/rules/stop-times.ts` | One scan of `stop_times` serving four rules |
+| `src/worker/validation/rules/patterns.ts` | Speed and stop-to-shape checks |
+| `src/worker/validation/rules/coverage.ts` | Unused routes, stops, and services |
+| `src/worker/validation/rules/stops.ts` | Coordinate and duplicate-stop checks |
+| `src/worker/validation/rules/feed.ts` | Feed-level checks |
+| `src/worker/validation/rules/index.ts` | The ordered list of checks (6) |
 
 ### 4.2 Rule interface
 
@@ -91,13 +96,15 @@ interface RuleContext {
   readonly today: string;
 }
 
-interface ValidationRule {
-  readonly id: RuleId;
+interface ValidationCheck {
+  readonly ruleIds: readonly RuleId[];
   run(ctx: RuleContext): Promise<void>;
 }
 ```
 
-Severity comes from `RULES[id]`, not from the emit call. The runner calls `checkpoint()` between rules; heavy rules call it between chunks. Target: no stretch between checkpoints longer than ~250 ms on MBTA.
+A check owns one or more rules, so one scan of `stop_times` can serve four rules. If a check throws, all of its rule ids are marked failed and its issues are discarded.
+
+Severity comes from `RULES[id]`, not from the emit call. The runner calls `checkpoint()` between checks; heavy rules call it between chunks. Target: no stretch between checkpoints longer than ~250 ms on MBTA.
 
 ### 4.3 Rules
 
@@ -136,11 +143,13 @@ getValidationSummary(feedId: string): ValidationSummary | null;
 getValidationIssues(feedId: string, filter: ValidationFilter): ValidationIssue[];
 ```
 
-- `ValidationProgress = {ruleIndex, ruleCount, ruleId}`.
+- `ValidationProgress = {checkIndex, checkCount}` (6 checks).
+- `ValidationIssue` carries `routeName` / `stopName`, joined at read time (null when the referenced route or stop doesn't exist), so the report can label buttons and hide buttons to missing entities.
+- The report expands an import-issue code through a new `getImportIssues(feedId, code)`.
 - `ValidationStatus = {state: 'current', counts: {error, warning, info}} | {state: 'cancelled'} | {state: 'failed', message}`.
 - `ensureValidation` opens the feed (as `openFeed` does). If results are current it returns immediately; otherwise it runs the validator. A call while a run for the same feed is in progress joins that run's promise (its `onProgress` is added to the listeners).
 - `closeCurrent()` (switching or deleting the feed) cancels an in-progress run; the run resolves `cancelled` at its next checkpoint.
-- A rule that throws is recorded in `validation_rules.error_message` and the run continues. A failure of the run itself (e.g. quota error during the swap) resolves `failed` and leaves previous results intact.
+- A check that throws is recorded in `validation_rules.error_message` and the run continues. A failure of the run itself (e.g. quota error during the swap) resolves `failed` and leaves previous results intact.
 - `getValidationSummary` returns `null` when results are missing or outdated. Otherwise: per rule `{ruleId, severity, total, stored, errorMessage}`, plus import issues grouped by code `{code, severity, count}` excluding `suppressed`.
 - `ValidationFilter = {ruleId} | {routeId} | {stopId}`. A `stopId` that is a station also matches its child stops. Results are ordered by severity, then rule, then insertion.
 
@@ -170,9 +179,9 @@ Accessible names (headings, button labels, section labels) are part of the E2E c
 
 | Condition | Behavior |
 |---|---|
-| Rule throws | Recorded for that rule; other rules run; report shows the error |
+| Check throws | Recorded for all of that check's rules; other checks run; report shows the error |
 | Run fails (e.g. quota) | Status `failed`; previous results kept; Feed details shows the message; explorer unaffected |
-| Feed switched or deleted mid-run | Run cancelled; `_next` tables cleaned up by the next run |
+| Feed switched or deleted mid-run | Run cancelled; nothing is written |
 | Worker crash mid-run | Restarted worker sees outdated or missing results and re-runs on open |
 | Results missing or outdated | Treated as "not yet checked"; inline sections hidden until a run completes |
 
@@ -181,13 +190,13 @@ Accessible names (headings, button labels, section labels) are part of the E2E c
 - **Unit (Vitest):**
   - `geo_test.ts`: haversine and point-to-polyline against known values, including segment endpoints and one-point lines.
   - One test file per rule group. Each starts from the sample feed (via `withFile` variants and `loadSampleDb`) with one seeded defect, and asserts the issue, its severity, entity links, and details. Rules that depend on the date receive `today` from the test.
-  - A combined test: **the clean sample feed validates with zero issues.** If the current fixture trips a rule (e.g. an unused stop), the fixture is fixed, not the rule.
-  - `runner_test.ts`: cap and true totals; throwing rule recorded while others run; cancellation leaves previous results and a `_next` table that the next run removes; atomic swap; same version skips, different version re-runs.
+  - A combined test: **`VALID_FEED` validates with zero issues.** `SAMPLE_FEED` genuinely has defects (route R30 has no trips; R10 buses run ~200 km/h) and many existing tests depend on it, so it stays as the "has issues" feed; `VALID_FEED` (in `sample-feed.ts`) is `SAMPLE_FEED` with those fixed and calendar end dates of `20991231`. If `VALID_FEED` trips a rule, the fixture is fixed, not the rule.
+  - `runner_test.ts`: cap and true totals; throwing check recorded while others run; cancellation leaves previous results untouched and writes nothing; atomic write; same version skips, different version re-runs.
   - `feed-service_test.ts`: concurrent `ensureValidation` calls join one run; `closeCurrent` cancels; a feed without validation tables validates on first call; summary and filters (including station → children).
 - **E2E (Playwright, fake map):** a sample-feed variant with seeded defects (built in `sample-feed.ts`, which stays fflate-only):
   - Feed details shows counts.
   - Report → expand a rule → "Open route …" → route detail shows its Issues section → Back returns to the report.
-  - The clean sample feed shows "No issues found".
+  - `VALID_FEED` shows "No issues found".
 - **Performance:** `npm run perf` also times `ensureValidation` with a per-rule breakdown; MBTA numbers go in `docs/perf-baseline.md`. Targets on MBTA in Node: full run under ~10 s; no stretch between checkpoints over ~250 ms. A rule that misses the budget gets finer chunking.
 
 ## 8. Out of scope
