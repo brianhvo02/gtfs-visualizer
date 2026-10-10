@@ -18,7 +18,7 @@ export function translated(table: TranslatableTable, field: string, alias: strin
   if (lang === null) return column;
   const base =
     `SELECT tr.translation FROM translations tr WHERE tr.table_name = '${table}' ` +
-    `AND tr.field_name = '${field}' AND tr.language = $lang COLLATE NOCASE AND tr.translation IS NOT NULL`;
+    `AND tr.field_name = '${field}' AND tr.language = $lang AND tr.translation IS NOT NULL`;
   const key = RECORD_KEYS[table];
   if (key === null) return `COALESCE((${base} ORDER BY tr.rowid LIMIT 1), ${column})`;
   return (
