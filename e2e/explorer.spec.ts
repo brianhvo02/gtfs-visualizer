@@ -73,6 +73,111 @@ test('imports a feed from the catalog', async ({page, context}) => {
   await expect(page.locator('.feed-list').getByRole('button', {name: 'Demo Catalog Feed', exact: true})).toBeVisible();
 });
 
+const KEYED = {
+  kind: 'key',
+  provider: 'odpt',
+  signupUrl: 'https://signup.test/odpt',
+  queryParam: 'acl:consumerKey',
+  header: null,
+} as const;
+
+test('imports a keyed feed, remembers the key per provider, and forgets it', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {id: 'keyed-one', name: 'Keyed Feed', place: 'Keyland', zip: sampleZip(), access: KEYED, validKey: 'secret'},
+    {id: 'keyed-two', name: 'Other Keyed', place: 'Keyland', zip: sampleZip(), access: KEYED, validKey: 'secret'},
+  ]);
+  await page.goto('/');
+  await expect(page.getByRole('link', {name: 'Get a key'}).first()).toHaveAttribute('href', 'https://signup.test/odpt');
+  const field = page.getByLabel('API key for odpt').first();
+  await expect(field).toHaveAttribute('type', 'password');
+  await field.fill('secret');
+  await page.getByRole('button', {name: 'Save key and import Keyed Feed', exact: true}).click();
+  await expect(page).toHaveURL(/feed=keyed-one/, {timeout: 30_000});
+  expect(page.url()).not.toContain('secret');
+  await page.getByRole('button', {name: 'Change feed'}).click();
+  await expect(page.getByRole('button', {name: 'Forget key for odpt'}).first()).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Import Other Keyed', exact: true})).toBeVisible();
+  await page.getByRole('button', {name: 'Forget key for odpt'}).first().click();
+  await expect(page.getByLabel('API key for odpt')).toHaveCount(2);
+});
+
+test('a rejected key shows a message and asks for the key again', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {id: 'keyed-one', name: 'Keyed Feed', place: 'Keyland', zip: sampleZip(), access: KEYED, validKey: 'secret'},
+  ]);
+  await page.goto('/');
+  await page.getByLabel('API key for odpt').fill('wrong');
+  await page.getByRole('button', {name: 'Save key and import Keyed Feed', exact: true}).click();
+  await expect(page.getByText('The provider rejected this key.')).toBeVisible();
+  await expect(page.getByLabel('API key for odpt')).toBeVisible();
+});
+
+test('falls back to download instructions when the browser blocks the feed', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {
+      id: 'blocked-one',
+      name: 'Blocked Feed',
+      place: 'Walled City',
+      zip: sampleZip(),
+      blockDirect: true,
+      originalUrl: 'https://agency.test/gtfs',
+    },
+  ]);
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Import Blocked Feed', exact: true}).click();
+  await expect(page.getByRole('link', {name: 'Download Blocked Feed'})).toHaveAttribute(
+    'href',
+    'https://agency.test/gtfs',
+  );
+  await page.getByLabel('Upload downloaded file for Blocked Feed').setInputFiles({
+    name: 'whatever.zip',
+    mimeType: 'application/zip',
+    buffer: sampleZip(),
+  });
+  await expect(page).toHaveURL(/feed=blocked-one/, {timeout: 30_000});
+  await page.getByRole('button', {name: 'Change feed'}).click();
+  await expect(page.locator('.feed-list').getByRole('button', {name: 'Blocked Feed', exact: true})).toBeVisible();
+});
+
+test('searches the whole catalog across scripts', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {id: 'akashi', name: '明石市 — たこバス', place: 'Akashi, Hyogo Prefecture, JP', zip: sampleZip(), featured: false},
+    {id: 'other', name: 'Other Transit', place: 'Elsewhere', zip: sampleZip(), featured: false},
+  ]);
+  await page.goto('/');
+  const search = page.getByRole('searchbox', {name: 'Search feeds'});
+  await search.fill('明石');
+  await expect(page.getByRole('button', {name: 'Import 明石市 — たこバス'})).toBeVisible();
+  await search.fill('akashi');
+  await expect(page.getByRole('button', {name: 'Import 明石市 — たこバス'})).toBeVisible();
+  await expect(page.getByRole('button', {name: 'Import Other Transit'})).toHaveCount(0);
+  await search.fill('   ');
+  await expect(page.getByRole('button', {name: 'Import 明石市 — たこバス'})).toHaveCount(0);
+  await expect(page.getByText(/Showing/)).toHaveCount(0);
+});
+
+test('flags a saved catalog feed when the provider has a newer version', async ({page, context}) => {
+  await context.unrouteAll();
+  const catalog = await mockCatalog(context, [
+    {id: 'demo-catalog', name: 'Demo Catalog Feed', place: 'Testland', zip: sampleZip(), etag: '"v1"'},
+  ]);
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Import Demo Catalog Feed'}).click();
+  await expect(page).toHaveURL(/feed=demo-catalog/, {timeout: 30_000});
+  await page.getByRole('button', {name: 'Change feed'}).click();
+  await expect(page.locator('.feed-list').getByRole('button', {name: 'Demo Catalog Feed', exact: true})).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page.getByText('Update available')).toHaveCount(0);
+
+  catalog.setEtag('demo-catalog', '"v2"');
+  await page.goto('/');
+  await expect(page.getByText('Update available')).toBeVisible();
+});
+
 test('explains deep links to missing feeds and routes', async ({page}) => {
   await page.goto('/?feed=nope');
   await expect(page.getByRole('status')).toContainText("isn't saved in this browser");

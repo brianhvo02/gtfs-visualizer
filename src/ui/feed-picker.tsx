@@ -1,19 +1,18 @@
-import {useState, type ReactElement} from 'react';
+import {useEffect, useMemo, useState, type ReactElement} from 'react';
 import {loadCatalog} from '../catalog/catalog.ts';
-import type {CatalogEntry} from '../catalog/catalog-types.ts';
+import {getKey} from '../catalog/key-store.ts';
+import {searchCatalog} from '../catalog/search.ts';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import type {FeedRecord, ImportFailure, ImportSource} from '../shared/types.ts';
+import {CatalogRow} from './catalog-row.tsx';
 import {describeProgress, formatServiceDate} from './format.ts';
 import {useAsync} from './use-async.ts';
 import {useImport} from './use-import.ts';
+import {useUpdateChecks} from './use-update-checks.ts';
 
 export interface FeedPickerProps {
   readonly service: FeedApi;
   readonly onOpen: (feedId: string) => void;
-}
-
-function catalogSource(entry: CatalogEntry): ImportSource {
-  return {kind: 'catalog', entry, key: null};
 }
 
 function ImportFailureView({failure}: {readonly failure: ImportFailure}): ReactElement {
@@ -37,15 +36,23 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
   const feeds = useAsync(() => service.listFeeds(), [service, version]);
   const catalog = useAsync(() => loadCatalog(), []);
   const importer = useImport(service);
-  const saved = feeds.status === 'ok' ? feeds.value : [];
-  // Interim: the full picker (Task 6) replaces this featured-direct-only list.
-  const catalogFeeds =
-    catalog.status === 'ok'
-      ? catalog.value.entries.filter((entry) => entry.featured && entry.access.kind === 'direct')
-      : [];
-  const savedIds = new Set(saved.map((feed) => feed.id));
+  const saved = useMemo(() => (feeds.status === 'ok' ? feeds.value : []), [feeds]);
+  const entries = useMemo(() => (catalog.status === 'ok' ? catalog.value.entries : []), [catalog]);
+  const featured = useMemo(() => entries.filter((entry) => entry.featured), [entries]);
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [keysVersion, setKeysVersion] = useState(0);
+  const [attempted, setAttempted] = useState<string | null>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query), 150);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const search = useMemo(() => searchCatalog(entries, debounced), [entries, debounced]);
+  const searching = debounced.trim() !== '';
+  const updates = useUpdateChecks(saved, catalog.status === 'ok' ? entries : null);
 
   const start = async (source: ImportSource, sizeHint: number | null): Promise<void> => {
+    setAttempted(source.kind === 'catalog' || source.kind === 'catalog-file' ? source.entry.id : null);
     const feed = await importer.run(source, sizeHint);
     setVersion((v) => v + 1);
     if (feed !== null) onOpen(feed.id);
@@ -56,8 +63,11 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
       await start({kind: 'url', url: feed.sourceRef}, null);
       return;
     }
-    const entry = catalogFeeds.find((candidate) => candidate.id === feed.sourceRef);
-    if (entry !== undefined) await start(catalogSource(entry), null);
+    const entry = entries.find((candidate) => candidate.id === feed.sourceRef);
+    if (entry === undefined || entry.access.kind === 'download') return;
+    const key = entry.access.kind === 'key' ? getKey(entry.access.provider) : null;
+    if (entry.access.kind === 'key' && key === null) return;
+    await start({kind: 'catalog', entry, key}, null);
   };
 
   const remove = async (feed: FeedRecord): Promise<void> => {
@@ -95,6 +105,7 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
                 <span className="muted">
                   {formatServiceDate(feed.serviceStart)} – {formatServiceDate(feed.serviceEnd)}
                 </span>
+                {updates.has(feed.id) && <span className="badge">Update available</span>}
                 <span className="row-actions">
                   {feed.sourceKind !== 'file' && (
                     <button
@@ -121,28 +132,37 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
         </ul>
       )}
 
-      <h3>Catalog</h3>
+      <h3>{searching ? 'Search results' : 'Featured'}</h3>
       {catalog.status === 'loading' && <p className="muted">Loading catalog…</p>}
       {catalog.status === 'error' && <p className="muted">The catalog is unavailable right now.</p>}
-      <ul className="feed-list">
-        {catalogFeeds.map((entry) => {
-          const verb = savedIds.has(entry.id) ? 'Re-import' : 'Import';
-          return (
-            <li key={entry.id}>
-              <span>{entry.name}</span>
-              <span className="muted">{entry.place}</span>
-              <button
-                type="button"
-                disabled={importer.running}
-                aria-label={`${verb} ${entry.name}`}
-                onClick={() => void start(catalogSource(entry), null)}
-              >
-                {verb}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {catalog.status === 'ok' && (
+        <>
+          <ul className="feed-list">
+            {(searching ? search.results : featured).map((entry) => (
+              <CatalogRow
+                key={entry.id}
+                entry={entry}
+                busy={importer.running}
+                failure={attempted === entry.id ? importer.failure : null}
+                keysVersion={keysVersion}
+                onKeysChanged={() => setKeysVersion((n) => n + 1)}
+                onImport={(source) => void start(source, source.kind === 'catalog-file' ? source.file.size : null)}
+              />
+            ))}
+          </ul>
+          {searching && search.total > search.results.length && (
+            <p className="muted">{`Showing ${search.results.length} of ${search.total} — refine your search`}</p>
+          )}
+          {searching && search.total === 0 && <p className="muted">No feeds match.</p>}
+        </>
+      )}
+      <input
+        type="search"
+        aria-label="Search feeds"
+        placeholder="Search all feeds by name or place"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
 
       <h3>Import your own</h3>
       <form

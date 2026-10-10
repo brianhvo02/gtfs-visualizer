@@ -7,15 +7,44 @@ export function sampleZip(): Buffer {
   return Buffer.from(makeZip(SAMPLE_FEED));
 }
 
+export type MockAccess =
+  | {readonly kind: 'direct'}
+  | {
+      readonly kind: 'key';
+      readonly provider: string;
+      readonly signupUrl: string;
+      readonly queryParam: string | null;
+      readonly header: string | null;
+    }
+  | {readonly kind: 'download'; readonly pageUrl: string | null};
+
 export interface MockCatalogEntry {
   readonly id: string;
   readonly name: string;
   readonly place: string;
   readonly zip: Buffer;
+  readonly access?: MockAccess;
+  readonly featured?: boolean;
+  /** Served as the ETag on GET and HEAD. */
+  readonly etag?: string;
+  /** The zip request is aborted, as a browser does when CORS blocks it. */
+  readonly blockDirect?: boolean;
+  /** For keyed entries: the key the mock provider accepts (as the `acl:consumerKey` query parameter). */
+  readonly validKey?: string;
+  readonly originalUrl?: string;
+}
+
+export interface CatalogController {
+  setEtag(id: string, etag: string): void;
 }
 
 /** Serves /catalog.json from the app's own origin and the feed zips from https://feeds.test. */
-export async function mockCatalog(context: BrowserContext, entries: readonly MockCatalogEntry[]): Promise<void> {
+export async function mockCatalog(
+  context: BrowserContext,
+  entries: readonly MockCatalogEntry[],
+): Promise<CatalogController> {
+  const etags = new Map<string, string>();
+  for (const e of entries) if (e.etag !== undefined) etags.set(e.id, e.etag);
   const snapshot = {
     generatedAt: '2026-10-10T00:00:00Z',
     entries: entries.map((e) => ({
@@ -23,23 +52,31 @@ export async function mockCatalog(context: BrowserContext, entries: readonly Moc
       name: e.name,
       place: e.place,
       url: `https://feeds.test/${e.id}.zip`,
-      originalUrl: null,
-      access: {kind: 'direct'},
+      originalUrl: e.originalUrl ?? null,
+      access: e.access ?? {kind: 'direct'},
       license: null,
       bbox: null,
-      featured: true,
+      featured: e.featured ?? true,
       viaMobilityDatabase: false,
     })),
   };
   await context.route('**/catalog.json', (route) => route.fulfill({json: snapshot}));
   await context.route('https://feeds.test/**', async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    const entry = entries.find((e) => path === `/${e.id}.zip`);
-    if (entry !== undefined) {
-      return route.fulfill({body: entry.zip, contentType: 'application/zip', headers: CORS});
+    const request = route.request();
+    const url = new URL(request.url());
+    const entry = entries.find((e) => url.pathname === `/${e.id}.zip`);
+    if (entry === undefined) return route.fulfill({status: 404, headers: CORS});
+    if (entry.blockDirect === true) return route.abort('failed');
+    if (entry.access?.kind === 'key' && url.searchParams.get('acl:consumerKey') !== entry.validKey) {
+      return route.fulfill({status: 401, headers: CORS});
     }
-    return route.fulfill({status: 404, headers: CORS});
+    const etag = etags.get(entry.id);
+    const headers: Record<string, string> = {...CORS, 'access-control-expose-headers': 'ETag'};
+    if (etag !== undefined) headers['etag'] = etag;
+    if (request.method() === 'HEAD') return route.fulfill({status: 200, headers});
+    return route.fulfill({body: entry.zip, contentType: 'application/zip', headers});
   });
+  return {setEtag: (id, etag) => void etags.set(id, etag)};
 }
 
 export async function uploadSample(page: Page): Promise<void> {

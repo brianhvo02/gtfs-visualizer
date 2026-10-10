@@ -40,6 +40,24 @@ export function FeedInfo({feed, summary}: {readonly feed: FeedRecord; readonly s
         <dt>Import notes</dt>
         <dd>{summary.issueCount === 0 ? 'None' : `${summary.issueCount} recorded`}</dd>
       </dl>
+      {feed.sourceKind === 'catalog' && (
+        <p className="muted data-line">
+          Data: {summary.agencies.map((agency) => agency.name).join(', ') || '—'}
+          {feed.license !== null && (
+            <>
+              {' · '}
+              {/^https?:\/\//.test(feed.license) ? (
+                <a href={feed.license} target="_blank" rel="noreferrer">
+                  License
+                </a>
+              ) : (
+                `License: ${feed.license}`
+              )}
+            </>
+          )}
+          {feed.viaMobilityDatabase && ' · via Mobility Database'}
+        </p>
+      )}
       <table className="counts">
         <tbody>
           {COUNTED_TABLES.map((table) => (
