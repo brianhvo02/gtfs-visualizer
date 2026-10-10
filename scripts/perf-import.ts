@@ -3,6 +3,7 @@ import {createGtfsTables} from '../src/worker/ddl.ts';
 import {buildDerivedTables} from '../src/worker/derive.ts';
 import {IssueCollector} from '../src/worker/issues.ts';
 import {loadGtfsZip} from '../src/worker/loader.ts';
+import {getFeedLanguages, getMapLabels, getStopDepartures} from '../src/worker/queries.ts';
 import {loadSqlite} from '../src/worker/sqlite.ts';
 
 const path = process.argv[2];
@@ -40,3 +41,27 @@ console.table({
   dbMB: ((pageCount * pageSize) / 1e6).toFixed(1),
   issues: issues.totalCount(),
 });
+
+const {languages, originalLanguage} = getFeedLanguages(db);
+const translated = languages.filter((language) => language !== originalLanguage);
+const lang = translated[0];
+const busiestStop = db.selectValue(
+  'SELECT stop_id FROM stop_times GROUP BY stop_id ORDER BY count(*) DESC LIMIT 1',
+);
+const serviceStart = db.selectValue("SELECT value FROM feed_summary WHERE key = 'service_start'");
+if (lang === undefined || typeof busiestStop !== 'string' || typeof serviceStart !== 'string') {
+  console.log('No translations in this feed.');
+} else {
+  const time = (run: () => unknown): string => {
+    const t0 = performance.now();
+    run();
+    return (performance.now() - t0).toFixed(1);
+  };
+  console.log(`Translated queries (language ${lang}, busiest stop ${busiestStop}, date ${serviceStart}):`);
+  console.table({
+    getMapLabelsMsOriginal: time(() => getMapLabels(db, null)),
+    getMapLabelsMsTranslated: time(() => getMapLabels(db, lang)),
+    getStopDeparturesMsOriginal: time(() => getStopDepartures(db, busiestStop, serviceStart, null)),
+    getStopDeparturesMsTranslated: time(() => getStopDepartures(db, busiestStop, serviceStart, lang)),
+  });
+}
