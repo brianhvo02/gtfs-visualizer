@@ -7,9 +7,11 @@ export interface Selection {
   readonly stop: string | null;
   /** Service date as YYYYMMDD. */
   readonly date: string | null;
+  /** Requested language code, as written in the URL (`original` for untranslated text). */
+  readonly lang: string | null;
 }
 
-export const EMPTY_SELECTION: Selection = {feed: null, route: null, stop: null, date: null};
+export const EMPTY_SELECTION: Selection = {feed: null, route: null, stop: null, date: null, lang: null};
 
 const CHANGE_EVENT = 'gtfs:selectionchange';
 
@@ -26,6 +28,7 @@ export function parseSelection(search: string): Selection {
     route: param(params, 'route'),
     stop: param(params, 'stop'),
     date: isoDate === null ? null : fromIsoDate(isoDate),
+    lang: param(params, 'lang'),
   };
 }
 
@@ -35,13 +38,14 @@ export function serializeSelection(selection: Selection): string {
   if (selection.route !== null) params.set('route', selection.route);
   if (selection.stop !== null) params.set('stop', selection.stop);
   if (selection.date !== null) params.set('date', toIsoDate(selection.date));
+  if (selection.lang !== null) params.set('lang', selection.lang);
   const query = params.toString();
   return query.length === 0 ? '' : `?${query}`;
 }
 
 export function applyPatch(current: Selection, patch: Partial<Selection>): Selection {
   const switchingFeed = patch.feed !== undefined && patch.feed !== current.feed;
-  const base = switchingFeed ? {...EMPTY_SELECTION} : current;
+  const base = switchingFeed ? {...EMPTY_SELECTION, lang: current.lang} : current;
   return {...base, ...patch};
 }
 

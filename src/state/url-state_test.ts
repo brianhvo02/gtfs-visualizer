@@ -4,7 +4,7 @@ import {applyPatch, EMPTY_SELECTION, parseSelection, serializeSelection} from '.
 describe('url state', () => {
   it('parses and serializes selections', () => {
     const selection = parseSelection('?feed=demo&route=R10&stop=STN&date=2026-10-12');
-    expect(selection).toEqual({feed: 'demo', route: 'R10', stop: 'STN', date: '20261012'});
+    expect(selection).toEqual({feed: 'demo', route: 'R10', stop: 'STN', date: '20261012', lang: null});
     expect(serializeSelection(selection)).toBe('?feed=demo&route=R10&stop=STN&date=2026-10-12');
   });
 
@@ -19,9 +19,16 @@ describe('url state', () => {
   });
 
   it('clears route, stop, and date when switching feeds', () => {
-    const current = {feed: 'a', route: 'R', stop: 'S', date: '20261012'};
-    expect(applyPatch(current, {feed: 'b'})).toEqual({feed: 'b', route: null, stop: null, date: null});
-    expect(applyPatch(current, {feed: 'b', route: 'R2'})).toEqual({feed: 'b', route: 'R2', stop: null, date: null});
+    const current = {feed: 'a', route: 'R', stop: 'S', date: '20261012', lang: null};
+    expect(applyPatch(current, {feed: 'b'})).toEqual({feed: 'b', route: null, stop: null, date: null, lang: null});
+    expect(applyPatch(current, {feed: 'b', route: 'R2'})).toEqual({feed: 'b', route: 'R2', stop: null, date: null, lang: null});
     expect(applyPatch(current, {stop: null})).toEqual({...current, stop: null});
+  });
+
+  it('round-trips lang and keeps it when switching feeds', () => {
+    expect(parseSelection('?feed=a&lang=fr').lang).toBe('fr');
+    expect(serializeSelection({...EMPTY_SELECTION, feed: 'a', lang: 'fr'})).toBe('?feed=a&lang=fr');
+    const current = {feed: 'a', route: 'R', stop: 'S', date: '20261012', lang: 'fr'};
+    expect(applyPatch(current, {feed: 'b'})).toEqual({feed: 'b', route: null, stop: null, date: null, lang: 'fr'});
   });
 });
