@@ -224,13 +224,14 @@ test('flags a saved catalog feed when the provider has a newer version', async (
   const catalog = await mockCatalog(context, [
     {id: 'demo-catalog', name: 'Demo Catalog Feed', place: 'Testland', zip: sampleZip(), etag: '"v1"'},
   ]);
-  const headSeen = page.waitForRequest((request) => request.method() === 'HEAD' && request.url().includes('demo-catalog.zip'));
   await page.goto('/');
   await page.getByRole('button', {name: 'Import Demo Catalog Feed'}).click();
   await expect(page).toHaveURL(/feed=demo-catalog/, {timeout: 30_000});
+  // The update check is a headers-only GET once the saved-feed list shows.
+  const checkSeen = page.waitForResponse((response) => response.request().method() === 'GET' && response.url().includes('demo-catalog.zip'));
   await page.getByRole('button', {name: 'Change feed'}).click();
   await expect(page.locator('.feed-list').getByRole('button', {name: 'Demo Catalog Feed', exact: true})).toBeVisible();
-  await headSeen;
+  await checkSeen;
   await expect(page.getByText('Update available')).toHaveCount(0);
 
   catalog.setEtag('demo-catalog', '"v2"');

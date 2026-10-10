@@ -61,12 +61,12 @@ const keyAccess: Access = {
 };
 
 describe('checkForUpdate', () => {
-  it('is current when the ETag matches, using a keyed HEAD request', async () => {
+  it('is current when the ETag matches, using a keyed headers-only request', async () => {
     const f = fakeFetch(new Response(null, {headers: {ETag: '"abc"'}}));
     const status = await checkForUpdate(entry(keyAccess), record('"abc"', null), 'k1', f.fn);
     expect(status).toBe('current');
     expect(f.calls).toHaveLength(1);
-    expect(f.calls[0]?.init.method).toBe('HEAD');
+    expect(f.calls[0]?.init.method).toBe('GET');
     expect(f.calls[0]?.url).toBe('https://example.com/feed.zip?api_key=k1');
   });
 
@@ -112,7 +112,7 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate(entry(), record('"a"', null), null, f.fn)).toBe('unknown');
   });
 
-  it('is unknown when HEAD is not allowed', async () => {
+  it('is unknown when the request is refused', async () => {
     const f = fakeFetch(new Response(null, {status: 405, headers: {ETag: '"b"'}}));
     expect(await checkForUpdate(entry(), record('"a"', null), null, f.fn)).toBe('unknown');
   });

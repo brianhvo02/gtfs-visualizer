@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState, type ReactElement} from 'react';
 import type {CatalogEntry} from '../catalog/catalog-types.ts';
 import {loadCatalog} from '../catalog/catalog.ts';
+import {fetchFeedSize} from '../catalog/feed-size.ts';
 import {forgetKey, getKey} from '../catalog/key-store.ts';
 import {searchCatalog} from '../catalog/search.ts';
 import type {FeedApi} from '../db-client/feed-api.ts';
@@ -68,7 +69,9 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
 
   const start = async (source: ImportSource, sizeHint: number | null): Promise<void> => {
     setAttempted(source.kind === 'catalog' || source.kind === 'catalog-file' ? source.entry.id : null);
-    const feed = await importer.run(source, sizeHint);
+    // Catalog downloads have no size up front; ask the provider so the storage warning still applies.
+    const size = sizeHint ?? (source.kind === 'catalog' ? await fetchFeedSize(source.entry, source.key) : null);
+    const feed = await importer.run(source, size);
     if (feed === null && source.kind === 'catalog' && source.entry.access.kind === 'key' && importer.failureRef.current?.code === 'key_rejected') {
       forgetKey(source.entry.access.provider);
       setKeysVersion((n) => n + 1);

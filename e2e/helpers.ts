@@ -25,7 +25,7 @@ export interface MockCatalogEntry {
   readonly zip: Buffer;
   readonly access?: MockAccess;
   readonly featured?: boolean;
-  /** Served as the ETag on GET and HEAD. */
+  /** Served as the ETag on GET. */
   readonly etag?: string;
   /** The zip request is aborted, as a browser does when CORS blocks it. */
   readonly blockDirect?: boolean;
@@ -73,7 +73,8 @@ export async function mockCatalog(
     const etag = etags.get(entry.id);
     const headers: Record<string, string> = {...CORS, 'access-control-expose-headers': 'ETag'};
     if (etag !== undefined) headers['etag'] = etag;
-    if (request.method() === 'HEAD') return route.fulfill({status: 200, headers});
+    // Like Mobility Database's storage: CORS headers only on GET, so a browser HEAD fails.
+    if (request.method() === 'HEAD') return route.fulfill({status: 200});
     return route.fulfill({body: entry.zip, contentType: 'application/zip', headers});
   });
   return {setEtag: (id, etag) => void etags.set(id, etag)};

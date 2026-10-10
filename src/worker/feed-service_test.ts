@@ -265,8 +265,8 @@ describe('FeedService', () => {
   });
 
   it('checks storage headroom at the shared multiple of the download size', async () => {
-    expect(await service.checkStorage(40)).toEqual({ok: true, availableBytes: 600});
-    expect(await service.checkStorage(41)).toEqual({ok: false, availableBytes: 600});
+    expect(await service.checkStorage(20)).toEqual({ok: true, availableBytes: 600});
+    expect(await service.checkStorage(21)).toEqual({ok: false, availableBytes: 600});
   });
 
   it('never replaces a saved feed with an upload of the same name', async () => {
