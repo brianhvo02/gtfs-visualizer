@@ -16,7 +16,6 @@ import {RouteList} from './ui/route-list.tsx';
 import {StopDetailView} from './ui/stop-detail.tsx';
 import {useAsync} from './ui/use-async.ts';
 
-const CATALOG_BASE_URL = import.meta.env.VITE_CATALOG_BASE_URL || null;
 
 const NO_STOPS: readonly string[] = [];
 const NO_LANGUAGE: ResolvedLanguage = {display: null, query: null};
@@ -73,7 +72,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
 
   let content: ReactElement;
   if (feedId === null) {
-    content = <FeedPicker service={service} catalogBaseUrl={CATALOG_BASE_URL} onOpen={openFeed} />;
+    content = <FeedPicker service={service} onOpen={openFeed} />;
   } else if (feed.status === 'error') {
     content = <ErrorMessage error={feed.error} />;
   } else if (languages.status === 'error') {

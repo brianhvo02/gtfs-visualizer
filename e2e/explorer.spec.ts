@@ -65,7 +65,7 @@ test('explains a blocked URL download and suggests uploading', async ({page, con
 
 test('imports a feed from the catalog', async ({page, context}) => {
   await context.unrouteAll();
-  await mockCatalog(context, [{id: 'demo-catalog', name: 'Demo Catalog Feed', region: 'Testland', zip: sampleZip()}]);
+  await mockCatalog(context, [{id: 'demo-catalog', name: 'Demo Catalog Feed', place: 'Testland', zip: sampleZip()}]);
   await page.goto('/');
   await page.getByRole('button', {name: 'Import Demo Catalog Feed'}).click();
   await expect(page).toHaveURL(/feed=demo-catalog/, {timeout: 30_000});

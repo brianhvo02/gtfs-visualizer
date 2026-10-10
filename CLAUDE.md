@@ -16,10 +16,9 @@ npx tsc -b                           # type-check (app + node/scripts/e2e projec
 npm run lint                         # oxlint
 npm run build                        # tsc -b && vite build
 npm run perf -- path/to/feed.zip     # time a real import in Node (see docs/perf-baseline.md)
-npm run mirror                       # catalog → R2 mirror; needs R2_* env vars, normally run by CI only
 ```
 
-First E2E run: `npx playwright install chromium` (on Linux also `sudo npx playwright install-deps chromium` for its system libraries). E2E uses `.env.e2e` (`VITE_MAP_PROVIDER=fake`, `VITE_CATALOG_BASE_URL=https://catalog.test`); catalog and blocked-URL requests are faked with `context.route` in `e2e/helpers.ts`.
+First E2E run: `npx playwright install chromium` (on Linux also `sudo npx playwright install-deps chromium` for its system libraries). E2E uses `.env.e2e` (`VITE_MAP_PROVIDER=fake`); catalog (`/catalog.json`) and blocked-URL requests are faked with `context.route` in `e2e/helpers.ts`.
 
 ## Architecture
 
@@ -37,7 +36,7 @@ Fully client-side app (static hosting, no backend, no COOP/COEP headers). Design
 
 **UI.** The URL (`?feed=&route=&stop=&date=&lang=`) is the source of truth for selection (`src/state/url-state.ts`). `lang` is the requested language (reserved value `original`); `src/state/resolve-language.ts` resolves it against the feed's languages and the browser's, returning the feed's spelling, and only that resolved `query` is passed to the worker, which matches it exactly. `src/ui/use-async.ts` tags results with the deps that produced them and returns `loading` when deps change, so views never see a previous input's result — rely on this rather than adding guards. The map is behind a provider-neutral `MapAdapter` (`src/map/adapter.ts`); only `src/map/mapbox-adapter.ts` may import `mapbox-gl`. `fake-adapter.ts` renders features as `button[data-layer]` with JSON state in `[data-testid="fake-map"]` `data-state` — E2E tests depend on that and on the accessible names in the sidebar views. Mapbox uses the Standard style: our layers go in its `middle` (routes) and `top` (stops) slots with `*-emissive-strength: 1` so the light preset doesn't darken them. The map lighting choice (`auto` follows `prefers-color-scheme`) is a per-browser preference in `localStorage` (`src/map/light-setting.ts`), not URL state.
 
-**Catalog.** Author-maintained `catalog/catalog.json`; `.github/workflows/mirror-catalog.yml` runs `scripts/mirror/` nightly to upload zips and `catalog.lock.json` (sha256, size, fetch time) to R2. The app compares the lock's sha256 with the imported feed's to show "Update available". `src/catalog/catalog-types.ts` is shared with the Node script, so it must stay dependency-free.
+**Catalog.** Link catalog served as `/catalog.json` (same origin); `src/catalog/catalog-types.ts` is shared with Node scripts, so it must stay dependency-free.
 
 ## Conventions
 

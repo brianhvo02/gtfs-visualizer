@@ -1,7 +1,6 @@
 import {expect, type BrowserContext, type Page} from '@playwright/test';
 import {makeZip, SAMPLE_FEED, TRANSLATED_FEED} from '../src/test-fixtures/sample-feed.ts';
 
-export const CATALOG_BASE = 'https://catalog.test';
 const CORS = {'access-control-allow-origin': '*'};
 
 export function sampleZip(): Buffer {
@@ -11,32 +10,31 @@ export function sampleZip(): Buffer {
 export interface MockCatalogEntry {
   readonly id: string;
   readonly name: string;
-  readonly region: string;
+  readonly place: string;
   readonly zip: Buffer;
 }
 
-/** Serves catalog.json, catalog.lock.json, and feed zips for the fake catalog origin. */
+/** Serves /catalog.json from the app's own origin and the feed zips from https://feeds.test. */
 export async function mockCatalog(context: BrowserContext, entries: readonly MockCatalogEntry[]): Promise<void> {
-  const catalog = entries.map((e) => ({
-    id: e.id,
-    name: e.name,
-    region: e.region,
-    sourceUrl: `https://agency.test/${e.id}.zip`,
-  }));
-  const lock = {
-    generatedAt: '2026-10-09T00:00:00Z',
-    feeds: Object.fromEntries(
-      entries.map((e) => [
-        e.id,
-        {sha256: `sha-${e.id}`, size: e.zip.length, fetchedAt: '2026-10-09T00:00:00Z', lastError: null, lastErrorAt: null},
-      ]),
-    ),
+  const snapshot = {
+    generatedAt: '2026-10-10T00:00:00Z',
+    entries: entries.map((e) => ({
+      id: e.id,
+      name: e.name,
+      place: e.place,
+      url: `https://feeds.test/${e.id}.zip`,
+      originalUrl: null,
+      access: {kind: 'direct'},
+      license: null,
+      bbox: null,
+      featured: true,
+      viaMobilityDatabase: false,
+    })),
   };
-  await context.route(`${CATALOG_BASE}/**`, async (route) => {
+  await context.route('**/catalog.json', (route) => route.fulfill({json: snapshot}));
+  await context.route('https://feeds.test/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === '/catalog.json') return route.fulfill({json: catalog, headers: CORS});
-    if (path === '/catalog.lock.json') return route.fulfill({json: lock, headers: CORS});
-    const entry = entries.find((e) => path === `/feeds/${e.id}.zip`);
+    const entry = entries.find((e) => path === `/${e.id}.zip`);
     if (entry !== undefined) {
       return route.fulfill({body: entry.zip, contentType: 'application/zip', headers: CORS});
     }

@@ -1,5 +1,6 @@
 import {useState, type ReactElement} from 'react';
-import {fetchCatalog, isUpdateAvailable, type CatalogFeed} from '../catalog/catalog.ts';
+import {loadCatalog} from '../catalog/catalog.ts';
+import type {CatalogEntry} from '../catalog/catalog-types.ts';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import type {FeedRecord, ImportFailure, ImportSource} from '../shared/types.ts';
 import {describeProgress, formatServiceDate} from './format.ts';
@@ -8,12 +9,11 @@ import {useImport} from './use-import.ts';
 
 export interface FeedPickerProps {
   readonly service: FeedApi;
-  readonly catalogBaseUrl: string | null;
   readonly onOpen: (feedId: string) => void;
 }
 
-function catalogSource(entry: CatalogFeed): ImportSource {
-  return {kind: 'catalog', id: entry.id, name: entry.name, url: entry.zipUrl, sha256: entry.sha256};
+function catalogSource(entry: CatalogEntry): ImportSource {
+  return {kind: 'catalog', id: entry.id, name: entry.name, url: entry.url, sha256: null};
 }
 
 function ImportFailureView({failure}: {readonly failure: ImportFailure}): ReactElement {
@@ -31,17 +31,18 @@ function ImportFailureView({failure}: {readonly failure: ImportFailure}): ReactE
   );
 }
 
-export function FeedPicker({service, catalogBaseUrl, onOpen}: FeedPickerProps): ReactElement {
+export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
   const [version, setVersion] = useState(0);
   const [url, setUrl] = useState('');
   const feeds = useAsync(() => service.listFeeds(), [service, version]);
-  const catalog = useAsync(
-    async () => (catalogBaseUrl === null ? [] : await fetchCatalog(catalogBaseUrl)),
-    [catalogBaseUrl],
-  );
+  const catalog = useAsync(() => loadCatalog(), []);
   const importer = useImport(service);
   const saved = feeds.status === 'ok' ? feeds.value : [];
-  const catalogFeeds = catalog.status === 'ok' ? catalog.value : [];
+  // Interim: the full picker (Task 6) replaces this featured-direct-only list.
+  const catalogFeeds =
+    catalog.status === 'ok'
+      ? catalog.value.entries.filter((entry) => entry.featured && entry.access.kind === 'direct')
+      : [];
   const savedIds = new Set(saved.map((feed) => feed.id));
 
   const start = async (source: ImportSource, sizeHint: number | null): Promise<void> => {
@@ -50,16 +51,13 @@ export function FeedPicker({service, catalogBaseUrl, onOpen}: FeedPickerProps): 
     if (feed !== null) onOpen(feed.id);
   };
 
-  const catalogEntryFor = (feed: FeedRecord): CatalogFeed | undefined =>
-    feed.sourceKind === 'catalog' ? catalogFeeds.find((entry) => entry.id === feed.sourceRef) : undefined;
-
   const reimport = async (feed: FeedRecord): Promise<void> => {
     if (feed.sourceKind === 'url') {
       await start({kind: 'url', url: feed.sourceRef}, null);
       return;
     }
-    const entry = catalogEntryFor(feed);
-    if (entry !== undefined && entry.available) await start(catalogSource(entry), entry.size);
+    const entry = catalogFeeds.find((candidate) => candidate.id === feed.sourceRef);
+    if (entry !== undefined) await start(catalogSource(entry), null);
   };
 
   const remove = async (feed: FeedRecord): Promise<void> => {
@@ -84,7 +82,6 @@ export function FeedPicker({service, catalogBaseUrl, onOpen}: FeedPickerProps): 
       ) : (
         <ul className="feed-list">
           {saved.map((feed) => {
-            const entry = catalogEntryFor(feed);
             return (
               <li key={feed.id}>
                 <button
@@ -98,19 +95,11 @@ export function FeedPicker({service, catalogBaseUrl, onOpen}: FeedPickerProps): 
                 <span className="muted">
                   {formatServiceDate(feed.serviceStart)} – {formatServiceDate(feed.serviceEnd)}
                 </span>
-                {entry !== undefined && isUpdateAvailable(entry, feed) && (
-                  <span className="badge">Update available</span>
-                )}
                 <span className="row-actions">
                   {feed.sourceKind !== 'file' && (
                     <button
                       type="button"
-                      disabled={importer.running || (feed.sourceKind === 'catalog' && !entry?.available)}
-                      title={
-                        feed.sourceKind === 'catalog' && !entry?.available
-                          ? 'Not available in the catalog right now'
-                          : undefined
-                      }
+                      disabled={importer.running}
                       aria-label={`Re-import ${feed.name}`}
                       onClick={() => void reimport(feed)}
                     >
@@ -132,32 +121,28 @@ export function FeedPicker({service, catalogBaseUrl, onOpen}: FeedPickerProps): 
         </ul>
       )}
 
-      {catalogBaseUrl !== null && (
-        <>
-          <h3>Catalog</h3>
-          {catalog.status === 'loading' && <p className="muted">Loading catalog…</p>}
-          {catalog.status === 'error' && <p className="muted">The catalog is unavailable right now.</p>}
-          <ul className="feed-list">
-            {catalogFeeds.map((entry) => {
-              const verb = savedIds.has(entry.id) ? 'Re-import' : 'Import';
-              return (
-                <li key={entry.id}>
-                  <span>{entry.name}</span>
-                  <span className="muted">{entry.region}</span>
-                  <button
-                    type="button"
-                    disabled={!entry.available || importer.running}
-                    aria-label={`${verb} ${entry.name}`}
-                    onClick={() => void start(catalogSource(entry), entry.size)}
-                  >
-                    {entry.available ? verb : 'Not mirrored yet'}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
+      <h3>Catalog</h3>
+      {catalog.status === 'loading' && <p className="muted">Loading catalog…</p>}
+      {catalog.status === 'error' && <p className="muted">The catalog is unavailable right now.</p>}
+      <ul className="feed-list">
+        {catalogFeeds.map((entry) => {
+          const verb = savedIds.has(entry.id) ? 'Re-import' : 'Import';
+          return (
+            <li key={entry.id}>
+              <span>{entry.name}</span>
+              <span className="muted">{entry.place}</span>
+              <button
+                type="button"
+                disabled={importer.running}
+                aria-label={`${verb} ${entry.name}`}
+                onClick={() => void start(catalogSource(entry), null)}
+              >
+                {verb}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
       <h3>Import your own</h3>
       <form
