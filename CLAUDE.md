@@ -16,13 +16,15 @@ npx tsc -b                           # type-check (app + node/scripts/e2e projec
 npm run lint                         # oxlint
 npm run build                        # tsc -b && vite build
 npm run perf -- path/to/feed.zip     # time a real import in Node (see docs/perf-baseline.md)
+npm run catalog:sync                 # build public/catalog.json (also part of build); --if-missing on dev
+npm run catalog:sync -- --update-snapshot  # also refresh committed catalog/mdb-snapshot.json
 ```
 
-First E2E run: `npx playwright install chromium` (on Linux also `sudo npx playwright install-deps chromium` for its system libraries). E2E uses `.env.e2e` (`VITE_MAP_PROVIDER=fake`); catalog (`/catalog.json`) and blocked-URL requests are faked with `context.route` in `e2e/helpers.ts`.
+First E2E run: `npx playwright install chromium` (on Linux also `sudo npx playwright install-deps chromium` for its system libraries). E2E uses `.env.e2e` (`VITE_MAP_PROVIDER=fake`); the catalog (`context.route('**/catalog.json')`) and blocked-URL requests are faked in `e2e/helpers.ts` (`mockCatalog`).
 
 ## Architecture
 
-Fully client-side app (static hosting, no backend, no COOP/COEP headers). Design spec: `docs/superpowers/specs/2026-10-09-feed-import-and-explorer-design.md`; deployment (Cloudflare Pages + R2, GitHub Action): `docs/deploy.md`.
+Fully client-side app (static hosting, no backend, no COOP/COEP headers). Design spec: `docs/superpowers/specs/2026-10-09-feed-import-and-explorer-design.md`; deployment (Cloudflare Pages) and catalog maintenance: `docs/deploy.md`.
 
 **Worker owns all data.** `src/worker/worker.ts` runs `@sqlite.org/sqlite-wasm` with the `opfs-sahpool` VFS and exposes a `FeedService` (`src/worker/feed-service.ts`) via Comlink. The UI only sees `FeedApi = Remote<FeedService>` (`src/db-client/feed-api.ts`) — every method is async, and UI code never writes SQL. UI-side modules may import from `src/worker` with `import type` only (exception: `src/db-client/host.ts`, which references the worker entry URL); types and constants needed on both sides (import issues/progress, `STORAGE_HEADROOM`) live in `src/shared/`.
 
@@ -36,7 +38,7 @@ Fully client-side app (static hosting, no backend, no COOP/COEP headers). Design
 
 **UI.** The URL (`?feed=&route=&stop=&date=&lang=`) is the source of truth for selection (`src/state/url-state.ts`). `lang` is the requested language (reserved value `original`); `src/state/resolve-language.ts` resolves it against the feed's languages and the browser's, returning the feed's spelling, and only that resolved `query` is passed to the worker, which matches it exactly. `src/ui/use-async.ts` tags results with the deps that produced them and returns `loading` when deps change, so views never see a previous input's result — rely on this rather than adding guards. The map is behind a provider-neutral `MapAdapter` (`src/map/adapter.ts`); only `src/map/mapbox-adapter.ts` may import `mapbox-gl`. `fake-adapter.ts` renders features as `button[data-layer]` with JSON state in `[data-testid="fake-map"]` `data-state` — E2E tests depend on that and on the accessible names in the sidebar views. Mapbox uses the Standard style: our layers go in its `middle` (routes) and `top` (stops) slots with `*-emissive-strength: 1` so the light preset doesn't darken them. The map lighting choice (`auto` follows `prefers-color-scheme`) is a per-browser preference in `localStorage` (`src/map/light-setting.ts`), not URL state.
 
-**Catalog.** Link catalog served as `/catalog.json` (same origin); `src/catalog/catalog-types.ts` is shared with Node scripts, so it must stay dependency-free.
+**Catalog.** A catalog of links, not mirrored zips. `scripts/catalog/sync.ts` (`npm run catalog:sync`, run by `build`) merges the Mobility Database CSV (`CATALOG_MDB_URL`; falls back to committed `catalog/mdb-snapshot.json` if the download fails) with author-curated `catalog/catalog.json` (`{mdbId, ...overrides}` references or full entries; curated entries are featured and win on id) into git-ignored `public/catalog.json`, which the app fetches same-origin. Mobility Database ids may have uppercase and underscores (`FEED_ID_PATTERN`); curated full-entry ids use the stricter lowercase `ID_PATTERN`. Each entry's `access` is `direct`, `key` (query param or header; the visitor's key is stored per provider in `localStorage` as `gtfs-visualizer:key:<provider>` by `src/catalog/key-store.ts`, passed in `ImportSource`, never logged or put in URLs), or `download` (open the provider page, then upload). Import records the response's `ETag`/`Last-Modified`; `src/catalog/update-check.ts` compares them with a `HEAD` request (no download; `unknown` when the provider sends neither, or a key is missing) to show "Update available". Search is in `src/catalog/search.ts`. `src/catalog/catalog-types.ts` is shared with `scripts/`, so it must stay dependency-free.
 
 ## Conventions
 
