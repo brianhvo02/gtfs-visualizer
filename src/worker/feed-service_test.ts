@@ -60,7 +60,7 @@ describe('FeedService', () => {
     });
     expect(service.listFeeds()).toEqual([result.feed]);
     expect(progress.map((p) => p.stage)).toEqual(expect.arrayContaining(['parse', 'index', 'derive', 'register']));
-    expect(service.getRoutes('file-demo-transit').map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
+    expect(service.getRoutes('file-demo-transit', null).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
   });
 
   it('imports from a catalog entry using the catalog name and checksum', async () => {
@@ -123,11 +123,11 @@ describe('FeedService', () => {
     if (!result.ok) throw new Error(result.message);
     expect(service.openFeed('file-demo-transit')).toEqual(result.feed);
     expect(service.openFeed('missing')).toBeNull();
-    expect(service.getStopDetail('file-demo-transit', 'STN')?.routes).toHaveLength(2);
+    expect(service.getStopDetail('file-demo-transit', 'STN', null)?.routes).toHaveLength(2);
     service.deleteFeed('file-demo-transit');
     expect(service.listFeeds()).toEqual([]);
     expect(store.list()).toEqual([META_FILENAME]);
-    expect(() => service.getRoutes('file-demo-transit')).toThrow('Feed not found: file-demo-transit');
+    expect(() => service.getRoutes('file-demo-transit', null)).toThrow('Feed not found: file-demo-transit');
   });
 
   it('removes orphaned feed databases at startup', async () => {
@@ -198,7 +198,7 @@ describe('FeedService', () => {
     expect(second).toMatchObject({ok: false, code: 'fatal_issues'});
     expect(service.listFeeds()).toEqual(feedsBefore);
     expect(store.list().sort()).toEqual(filesBefore);
-    expect(service.getRoutes(first.feed.id).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
+    expect(service.getRoutes(first.feed.id, null).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
   });
 
   it('bypasses the HTTP cache for catalog downloads', async () => {

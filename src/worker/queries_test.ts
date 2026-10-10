@@ -5,6 +5,7 @@ import {loadSampleDb} from '../test-fixtures/sample-db.ts';
 import {
   getFeedLanguages,
   getFeedSummary,
+  getMapLabels,
   getRouteDetail,
   getRoutes,
   getRouteShapesGeoJSON,
@@ -21,11 +22,11 @@ beforeAll(async () => {
 });
 
 const departures = (stop: string, date: string): Array<[string, number]> =>
-  getStopDepartures(db, stop, date).map((d) => [d.tripId, d.departureSecs]);
+  getStopDepartures(db, stop, date, null).map((d) => [d.tripId, d.departureSecs]);
 
 describe('queries', () => {
   it('lists routes in display order with normalized colors', () => {
-    const routes = getRoutes(db);
+    const routes = getRoutes(db, null);
     expect(routes.map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
     expect(routes.map((r) => r.color)).toEqual(['#ff0000', '#00ff00', CATEGORY_COLORS.ferry]);
     expect(routes[0]?.textColor).toBe('#ffffff');
@@ -47,7 +48,7 @@ describe('queries', () => {
   });
 
   it('describes a route with ordered stops per pattern', () => {
-    const detail = getRouteDetail(db, 'R10');
+    const detail = getRouteDetail(db, 'R10', null);
     expect(detail?.route.routeId).toBe('R10');
     expect(detail?.patterns.map((p) => [p.patternId, p.tripCount, p.headsign])).toEqual([
       ['R10:0:1', 2, 'Central'],
@@ -61,12 +62,12 @@ describe('queries', () => {
   });
 
   it('returns null for unknown routes and stops', () => {
-    expect(getRouteDetail(db, 'NOPE')).toBeNull();
-    expect(getStopDetail(db, 'NOPE')).toBeNull();
+    expect(getRouteDetail(db, 'NOPE', null)).toBeNull();
+    expect(getStopDetail(db, 'NOPE', null)).toBeNull();
   });
 
   it('lists routes serving a parent station', () => {
-    const detail = getStopDetail(db, 'STN');
+    const detail = getStopDetail(db, 'STN', null);
     expect(detail?.stop.locationType).toBe(1);
     expect(detail?.routes.map((r) => r.routeId)).toEqual(['R10', 'R20']);
   });
@@ -102,7 +103,7 @@ describe('queries', () => {
   });
 
   it('summarizes the feed', () => {
-    const summary = getFeedSummary(db);
+    const summary = getFeedSummary(db, null);
     expect(summary.agencies).toEqual([
       {name: 'Demo Transit Authority', url: 'https://example.com', timezone: 'America/Los_Angeles'},
     ]);
@@ -136,5 +137,57 @@ describe('getFeedLanguages', () => {
     const {db} = await loadSampleDb();
     db.exec("DELETE FROM feed_summary WHERE key IN ('languages', 'original_language'); DROP TABLE translations;");
     expect(getFeedLanguages(db)).toEqual({languages: [], originalLanguage: null});
+  });
+});
+
+describe('translated queries', () => {
+  let tdb: Database;
+  beforeAll(async () => {
+    ({db: tdb} = await loadSampleDb(TRANSLATED_FEED));
+  });
+
+  it('translates stop names by id, by value, and falls back to the original', () => {
+    const name = (id: string, lang: string | null): string | undefined => getStopDetail(tdb, id, lang)?.stop.name;
+    expect(name('STN', 'fr')).toBe('Gare Centrale');
+    expect(name('NADAV', 'fr')).toBe('Avenue Nord / Avenue D');
+    expect(name('STN_A', 'fr')).toBe('Quai A'); // id beats value; first duplicate wins
+    expect(name('FUR', 'fr')).toBe('Furnace Creek'); // invalid rows skipped, empty translation ignored
+    expect(name('STN', 'DE')).toBe('Zentralbahnhof');
+    expect(name('STN', 'es')).toBe('Central Station');
+    expect(name('STN', null)).toBe('Central Station');
+  });
+
+  it('translates route names, pattern headsigns and pattern stops', () => {
+    expect(getRoutes(tdb, 'fr').find((r) => r.routeId === 'R10')?.longName).toBe('Aéroport - Centre');
+    const detail = getRouteDetail(tdb, 'R10', 'fr');
+    const outbound = detail?.patterns.find((p) => p.directionId === 0);
+    expect(outbound?.headsign).toBe('Centre');
+    expect(outbound?.stops.map((s) => s.name)).toEqual(['Aéroport de Beatty', 'Avenue Nord / Avenue D', 'Quai A']);
+  });
+
+  it('translates departure headsigns at a parent station', () => {
+    const byTrip = new Map(getStopDepartures(tdb, 'STN', '20261012', 'fr').map((d) => [d.tripId, d.headsign]));
+    expect(byTrip.get('T10_1')).toBe('Centre');
+    expect(byTrip.get('T20_1')).toBe('Furnace Creek');
+  });
+
+  it('translates agency and publisher names', () => {
+    const summary = getFeedSummary(tdb, 'fr');
+    expect(summary.agencies[0]?.name).toBe('Régie de transport démo');
+    expect(summary.feedInfo?.publisherName).toBe('Éditeur démo');
+  });
+
+  it('builds map labels', () => {
+    const labels = getMapLabels(tdb, 'fr');
+    expect(labels.routes['R10']).toBe('10 · Aéroport - Centre');
+    expect(labels.stops['STN']).toBe('Gare Centrale');
+    expect(labels.stops['STN_A']).toBe('Quai A');
+  });
+
+  it('runs untranslated queries on a DB without a translations table', async () => {
+    const {db: old} = await loadSampleDb();
+    old.exec('DROP TABLE translations');
+    expect(getStopDetail(old, 'STN', null)?.stop.name).toBe('Central Station');
+    expect(getRoutes(old, null)).toHaveLength(3);
   });
 });

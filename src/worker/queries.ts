@@ -12,6 +12,7 @@ import type {
   Departure,
   FeedLanguages,
   FeedSummary,
+  MapLabels,
   RouteDetail,
   RouteShapeProps,
   RouteSummary,
@@ -21,12 +22,22 @@ import type {
 } from '../shared/types.ts';
 import type {Database, SqlValue} from './sqlite.ts';
 import {asNumber, asString} from './sql-values.ts';
+import {langParams, translated} from './translate.ts';
 
 type Row = Record<string, SqlValue>;
 
 const SECONDS_PER_DAY = 86400;
-const ROUTE_COLUMNS =
-  'r.route_id, r.agency_id, r.route_short_name, r.route_long_name, r.route_type, r.route_color, r.route_text_color, r.route_sort_order';
+
+/** sqlite-wasm rejects binding an empty object to a statement with no parameters. */
+function onlyIfAny(params: Record<string, string>): Record<string, string> | undefined {
+  return Object.keys(params).length === 0 ? undefined : params;
+}
+
+function routeColumns(lang: string | null): string {
+  return `r.route_id, r.agency_id, ${translated('routes', 'route_short_name', 'r', lang)} AS route_short_name,
+    ${translated('routes', 'route_long_name', 'r', lang)} AS route_long_name,
+    r.route_type, r.route_color, r.route_text_color, r.route_sort_order`;
+}
 
 function toRouteSummary(row: Row): RouteSummary {
   const routeType = asNumber(row['route_type']) ?? 3;
@@ -54,12 +65,15 @@ function compareRoutes(a: RouteSummary, b: RouteSummary): number {
   return routeLabel(a).localeCompare(routeLabel(b), undefined, {numeric: true});
 }
 
-export function getRoutes(db: Database): RouteSummary[] {
-  return db.selectObjects(`SELECT ${ROUTE_COLUMNS} FROM routes r`).map(toRouteSummary).sort(compareRoutes);
+export function getRoutes(db: Database, lang: string | null): RouteSummary[] {
+  return db
+    .selectObjects(`SELECT ${routeColumns(lang)} FROM routes r`, onlyIfAny(langParams(lang)))
+    .map(toRouteSummary)
+    .sort(compareRoutes);
 }
 
 export function getRouteShapesGeoJSON(db: Database): FeatureCollection<LineString, RouteShapeProps> {
-  const routes = new Map(getRoutes(db).map((route) => [route.routeId, route]));
+  const routes = new Map(getRoutes(db, null).map((route) => [route.routeId, route]));
   const features = db
     .selectObjects('SELECT route_id, shape_id, geojson FROM route_shapes ORDER BY route_id, shape_id')
     .map((row) => {
@@ -104,13 +118,18 @@ export function getStopsGeoJSON(db: Database): FeatureCollection<Point, StopProp
   return {type: 'FeatureCollection', features};
 }
 
-export function getRouteDetail(db: Database, routeId: string): RouteDetail | null {
-  const routeRow = db.selectObject(`SELECT ${ROUTE_COLUMNS} FROM routes r WHERE r.route_id = ?`, [routeId]);
+export function getRouteDetail(db: Database, routeId: string, lang: string | null): RouteDetail | null {
+  const routeRow = db.selectObject(`SELECT ${routeColumns(lang)} FROM routes r WHERE r.route_id = $routeId`, {
+    ...langParams(lang),
+    $routeId: routeId,
+  });
   if (routeRow === undefined) return null;
   const patternRows = db.selectObjects(
-    `SELECT pattern_id, direction_id, stop_ids_json, trip_count, shape_id, headsign
-     FROM route_patterns WHERE route_id = ? ORDER BY direction_id, trip_count DESC, pattern_id`,
-    [routeId],
+    `SELECT p.pattern_id, p.direction_id, p.stop_ids_json, p.trip_count, p.shape_id,
+            ${translated('trips', 'trip_headsign', 't', lang)} AS headsign
+     FROM route_patterns p LEFT JOIN trips t ON t.trip_id = p.rep_trip_id
+     WHERE p.route_id = $routeId ORDER BY p.direction_id, p.trip_count DESC, p.pattern_id`,
+    {...langParams(lang), $routeId: routeId},
   );
   const parsed = patternRows.map((row) => {
     const ids: unknown = JSON.parse(asString(row['stop_ids_json']) ?? '[]');
@@ -119,8 +138,9 @@ export function getRouteDetail(db: Database, routeId: string): RouteDetail | nul
   const allIds = [...new Set(parsed.flatMap((p) => p.stopIds))];
   const stops = new Map<string, StopRef>();
   for (const row of db.selectObjects(
-    'SELECT stop_id, stop_name, stop_lat, stop_lon FROM stops WHERE stop_id IN (SELECT value FROM json_each(?))',
-    [JSON.stringify(allIds)],
+    `SELECT s.stop_id, ${translated('stops', 'stop_name', 's', lang)} AS stop_name, s.stop_lat, s.stop_lon
+     FROM stops s WHERE s.stop_id IN (SELECT value FROM json_each($ids))`,
+    {...langParams(lang), $ids: JSON.stringify(allIds)},
   )) {
     const stopId = asString(row['stop_id']) ?? '';
     stops.set(stopId, {
@@ -143,16 +163,20 @@ export function getRouteDetail(db: Database, routeId: string): RouteDetail | nul
   };
 }
 
-export function getStopDetail(db: Database, stopId: string): StopDetail | null {
+export function getStopDetail(db: Database, stopId: string, lang: string | null): StopDetail | null {
+  const params = {...langParams(lang), $stopId: stopId};
   const row = db.selectObject(
-    'SELECT stop_id, stop_name, stop_code, stop_lat, stop_lon, location_type, parent_station FROM stops WHERE stop_id = ?',
-    [stopId],
+    `SELECT s.stop_id, ${translated('stops', 'stop_name', 's', lang)} AS stop_name, s.stop_code, s.stop_lat,
+            s.stop_lon, s.location_type, s.parent_station
+     FROM stops s WHERE s.stop_id = $stopId`,
+    params,
   );
   if (row === undefined) return null;
   const routes = db
     .selectObjects(
-      `SELECT ${ROUTE_COLUMNS} FROM routes r JOIN stop_routes sr ON sr.route_id = r.route_id WHERE sr.stop_id = ?`,
-      [stopId],
+      `SELECT ${routeColumns(lang)} FROM routes r JOIN stop_routes sr ON sr.route_id = r.route_id
+       WHERE sr.stop_id = $stopId`,
+      params,
     )
     .map(toRouteSummary)
     .sort(compareRoutes);
@@ -191,19 +215,22 @@ function loadCalendars(db: Database): {calendar: CalendarRow[]; dates: CalendarD
   return {calendar, dates};
 }
 
-const DEPARTURES_SQL = `
-  SELECT st.trip_id, st.stop_id, st.departure_secs, t.route_id, t.trip_headsign,
-         ${ROUTE_COLUMNS}
+function departuresSql(lang: string | null): string {
+  return `
+  SELECT st.trip_id, st.stop_id, st.departure_secs, t.route_id,
+         ${translated('trips', 'trip_headsign', 't', lang)} AS trip_headsign,
+         ${routeColumns(lang)}
   FROM stop_times st
   JOIN trips t ON t.trip_id = st.trip_id
   JOIN routes r ON r.route_id = t.route_id
-  WHERE st.stop_id IN (SELECT stop_id FROM stops WHERE stop_id = ?1 OR parent_station = ?1)
-    AND t.service_id IN (SELECT value FROM json_each(?2))
+  WHERE st.stop_id IN (SELECT stop_id FROM stops WHERE stop_id = $stopId OR parent_station = $stopId)
+    AND t.service_id IN (SELECT value FROM json_each($serviceIds))
     AND st.departure_secs IS NOT NULL
-    AND st.departure_secs >= ?3`;
+    AND st.departure_secs >= $minSecs`;
+}
 
 /** Departures at a stop (or a station's platforms) on a service date, including late trips from the day before. */
-export function getStopDepartures(db: Database, stopId: string, serviceDate: string): Departure[] {
+export function getStopDepartures(db: Database, stopId: string, serviceDate: string, lang: string | null): Departure[] {
   const {calendar, dates} = loadCalendars(db);
   const today = [...activeServiceIds(calendar, dates, serviceDate)];
   const yesterday = [...activeServiceIds(calendar, dates, addDays(serviceDate, -1))];
@@ -221,11 +248,16 @@ export function getStopDepartures(db: Database, stopId: string, serviceDate: str
       departureSecs: (asNumber(row['departure_secs']) ?? 0) - offset,
     };
   };
+  const sql = departuresSql(lang);
+  const bind = (serviceIds: string[], minSecs: number): Record<string, string | number> => ({
+    ...langParams(lang),
+    $stopId: stopId,
+    $serviceIds: JSON.stringify(serviceIds),
+    $minSecs: minSecs,
+  });
   const result = [
-    ...db
-      .selectObjects(DEPARTURES_SQL, [stopId, JSON.stringify(yesterday), SECONDS_PER_DAY])
-      .map((row) => toDeparture(row, SECONDS_PER_DAY)),
-    ...db.selectObjects(DEPARTURES_SQL, [stopId, JSON.stringify(today), 0]).map((row) => toDeparture(row, 0)),
+    ...db.selectObjects(sql, bind(yesterday, SECONDS_PER_DAY)).map((row) => toDeparture(row, SECONDS_PER_DAY)),
+    ...db.selectObjects(sql, bind(today, 0)).map((row) => toDeparture(row, 0)),
   ];
   return result.sort((a, b) => a.departureSecs - b.departureSecs || a.tripId.localeCompare(b.tripId));
 }
@@ -247,7 +279,7 @@ export function getFeedLanguages(db: Database): FeedLanguages {
   return {languages, originalLanguage: rows.get('original_language') ?? null};
 }
 
-export function getFeedSummary(db: Database): FeedSummary {
+export function getFeedSummary(db: Database, lang: string | null): FeedSummary {
   const summary = new Map(
     db.selectObjects('SELECT key, value FROM feed_summary').map((row) => [
       asString(row['key']) ?? '',
@@ -259,10 +291,19 @@ export function getFeedSummary(db: Database): FeedSummary {
     if (key.startsWith('count:')) counts[key.slice('count:'.length)] = Number(value);
   }
   const info = db.selectObject(
-    'SELECT feed_publisher_name, feed_version, feed_start_date, feed_end_date FROM feed_info LIMIT 1',
+    `SELECT ${translated('feed_info', 'feed_publisher_name', 'fi', lang)} AS feed_publisher_name,
+            fi.feed_version, fi.feed_start_date, fi.feed_end_date
+     FROM feed_info fi LIMIT 1`,
+    onlyIfAny(langParams(lang)),
   );
   return {
-    agencies: db.selectObjects('SELECT agency_name, agency_url, agency_timezone FROM agency').map((row) => ({
+    agencies: db
+      .selectObjects(
+        `SELECT ${translated('agency', 'agency_name', 'a', lang)} AS agency_name, a.agency_url, a.agency_timezone
+         FROM agency a`,
+        onlyIfAny(langParams(lang)),
+      )
+      .map((row) => ({
       name: asString(row['agency_name']) ?? '',
       url: asString(row['agency_url']),
       timezone: asString(row['agency_timezone']),
@@ -282,4 +323,20 @@ export function getFeedSummary(db: Database): FeedSummary {
     timezone: summary.get('timezone') ?? null,
     issueCount: Number(db.selectValue("SELECT count(*) FROM import_issues WHERE code != 'suppressed'")),
   };
+}
+
+/** Display labels for map features in the given language (null = original text). */
+export function getMapLabels(db: Database, lang: string | null): MapLabels {
+  const routes: Record<string, string> = {};
+  for (const route of getRoutes(db, lang)) routes[route.routeId] = routeLabel(route);
+  const stops: Record<string, string> = {};
+  for (const row of db.selectObjects(
+    `SELECT s.stop_id, ${translated('stops', 'stop_name', 's', lang)} AS stop_name FROM stops s
+     WHERE s.stop_lat IS NOT NULL AND s.stop_lon IS NOT NULL AND COALESCE(s.location_type, 0) IN (0, 1)`,
+    onlyIfAny(langParams(lang)),
+  )) {
+    const stopId = asString(row['stop_id']) ?? '';
+    stops[stopId] = asString(row['stop_name']) ?? stopId;
+  }
+  return {routes, stops};
 }

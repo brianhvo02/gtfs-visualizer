@@ -33,9 +33,9 @@ export function StopDetailView({
   // oxlint-disable-next-line react/purity
   const today = useMemo(() => todayInTimeZone(timezone, new Date()), [timezone]);
   const serviceDate = date ?? today;
-  const detail = useAsync(() => service.getStopDetail(feedId, stopId), [service, feedId, stopId]);
+  const detail = useAsync(() => service.getStopDetail(feedId, stopId, null), [service, feedId, stopId]);
   const departures = useAsync(
-    () => service.getStopDepartures(feedId, stopId, serviceDate),
+    () => service.getStopDepartures(feedId, stopId, serviceDate, null),
     [service, feedId, stopId, serviceDate],
   );
   const back = (

@@ -184,3 +184,8 @@ export interface FeedLanguages {
   readonly languages: readonly string[];
   readonly originalLanguage: string | null;
 }
+
+export interface MapLabels {
+  readonly routes: Readonly<Record<string, string>>;
+  readonly stops: Readonly<Record<string, string>>;
+}

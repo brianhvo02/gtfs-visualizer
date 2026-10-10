@@ -5,6 +5,7 @@ import type {
   FeedRecord,
   FeedSourceKind,
   FeedSummary,
+  MapLabels,
   ImportErrorCode,
   ImportFailure,
   ImportProgress,
@@ -188,7 +189,7 @@ export class FeedService {
       issues.finish();
       db.exec('PRAGMA journal_mode = DELETE; PRAGMA synchronous = FULL;');
       onProgress({stage: 'register'});
-      const summary = queries.getFeedSummary(db);
+      const summary = queries.getFeedSummary(db, null);
       this.store.close(filename);
       const record: FeedRecord = {
         id: acquired.id,
@@ -209,16 +210,16 @@ export class FeedService {
     }
   }
 
-  getFeedSummary(feedId: string): FeedSummary {
-    return queries.getFeedSummary(this.dbFor(feedId));
+  getFeedSummary(feedId: string, lang: string | null): FeedSummary {
+    return queries.getFeedSummary(this.dbFor(feedId), lang);
   }
 
   getFeedLanguages(feedId: string): FeedLanguages {
     return queries.getFeedLanguages(this.dbFor(feedId));
   }
 
-  getRoutes(feedId: string): RouteSummary[] {
-    return queries.getRoutes(this.dbFor(feedId));
+  getRoutes(feedId: string, lang: string | null): RouteSummary[] {
+    return queries.getRoutes(this.dbFor(feedId), lang);
   }
 
   getRouteShapesGeoJSON(feedId: string): FeatureCollection<LineString, RouteShapeProps> {
@@ -229,16 +230,20 @@ export class FeedService {
     return queries.getStopsGeoJSON(this.dbFor(feedId));
   }
 
-  getRouteDetail(feedId: string, routeId: string): RouteDetail | null {
-    return queries.getRouteDetail(this.dbFor(feedId), routeId);
+  getRouteDetail(feedId: string, routeId: string, lang: string | null): RouteDetail | null {
+    return queries.getRouteDetail(this.dbFor(feedId), routeId, lang);
   }
 
-  getStopDetail(feedId: string, stopId: string): StopDetail | null {
-    return queries.getStopDetail(this.dbFor(feedId), stopId);
+  getStopDetail(feedId: string, stopId: string, lang: string | null): StopDetail | null {
+    return queries.getStopDetail(this.dbFor(feedId), stopId, lang);
   }
 
-  getStopDepartures(feedId: string, stopId: string, serviceDate: string): Departure[] {
-    return queries.getStopDepartures(this.dbFor(feedId), stopId, serviceDate);
+  getMapLabels(feedId: string, lang: string | null): MapLabels {
+    return queries.getMapLabels(this.dbFor(feedId), lang);
+  }
+
+  getStopDepartures(feedId: string, stopId: string, serviceDate: string, lang: string | null): Departure[] {
+    return queries.getStopDepartures(this.dbFor(feedId), stopId, serviceDate, lang);
   }
 
   private async acquire(source: ImportSource): Promise<Acquired | ImportFailure> {

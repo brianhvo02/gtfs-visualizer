@@ -133,8 +133,8 @@ function FeedContent({
   onSelectStop,
   onPatternStops,
 }: FeedContentProps): ReactElement {
-  const summary = useAsync(() => service.getFeedSummary(feed.id), [service, feed.id]);
-  const routes = useAsync(() => service.getRoutes(feed.id), [service, feed.id]);
+  const summary = useAsync(() => service.getFeedSummary(feed.id, null), [service, feed.id]);
+  const routes = useAsync(() => service.getRoutes(feed.id, null), [service, feed.id]);
 
   if (summary.status === 'loading') return <p className="muted">Loading feed…</p>;
   if (summary.status === 'error') return <ErrorMessage error={summary.error} />;

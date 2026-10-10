@@ -25,7 +25,7 @@ export function RouteDetailView({
   onSelectStop,
   onPatternStops,
 }: RouteDetailViewProps): ReactElement {
-  const state = useAsync(() => service.getRouteDetail(feedId, routeId), [service, feedId, routeId]);
+  const state = useAsync(() => service.getRouteDetail(feedId, routeId, null), [service, feedId, routeId]);
   const [patternId, setPatternId] = useState<string | null>(null);
   const detail = state.status === 'ok' ? state.value : null;
   const pattern =
