@@ -1,6 +1,13 @@
 [
   {"mdbId": "mdb-437"},
-  {"mdbId": "mdb-3520"},
+  {
+    "id": "bay-area-511",
+    "name": "511 SF Bay Area (MTC regional)",
+    "place": "San Francisco Bay Area, California, US",
+    "url": "https://api.511.org/transit/datafeeds?operator_id=RG",
+    "access": {"kind": "key", "provider": "api.511.org", "signupUrl": "https://511.org/open-data/token", "queryParam": "api_key"},
+    "license": "https://511.org/sites/default/files/2026-04/511_Data_Agreement_Final_2026.pdf"
+  },
   {
     "id": "tokyo-metro",
     "name": "Tokyo Metro",
