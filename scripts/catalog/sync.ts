@@ -25,7 +25,6 @@ async function downloadEntries(): Promise<MappedRows> {
   return mapMobilityDatabaseRows(rowsFromCsv(await response.text()));
 }
 
-// Mobility Database ids may contain uppercase letters, so ids are only pattern-checked in curated entries.
 function readSnapshot(): CatalogEntry[] {
   if (!existsSync(SNAPSHOT_PATH)) fail(`${SNAPSHOT_PATH} is missing and the download failed`);
   try {

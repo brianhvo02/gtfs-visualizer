@@ -185,6 +185,40 @@ test('searches the whole catalog across scripts', async ({page, context}) => {
   await expect(page.getByText(/Showing/)).toHaveCount(0);
 });
 
+test('a query matching only a featured feed shows no results note', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {id: 'star', name: 'Starred Transit', place: 'Brighton', zip: sampleZip(), featured: true},
+    {id: 'other', name: 'Other Transit', place: 'Elsewhere', zip: sampleZip(), featured: false},
+  ]);
+  await page.goto('/');
+  await page.getByRole('searchbox', {name: 'Search feeds'}).fill('brighton');
+  await expect(page.getByText('No feeds match.')).toBeVisible();
+  await expect(page.getByText(/Showing/)).toHaveCount(0);
+});
+
+test('a blocked key feed asks for a download with the key instead of the keyless URL', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {
+      id: 'keyed-blocked',
+      name: 'Walled Keyed',
+      place: 'Keyland',
+      zip: sampleZip(),
+      access: KEYED,
+      blockDirect: true,
+      originalUrl: 'https://agency.test/api',
+    },
+  ]);
+  await page.goto('/');
+  await page.getByLabel('API key for odpt').fill('secret');
+  await page.getByRole('button', {name: 'Save key and import Walled Keyed', exact: true}).click();
+  await expect(page.getByText(/Download it from the provider with your key/)).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Download Walled Keyed'})).toHaveCount(0);
+  await expect(page.getByRole('link', {name: 'Get a key'})).toHaveAttribute('href', KEYED.signupUrl);
+  await expect(page.getByLabel('Upload downloaded file for Walled Keyed')).toBeVisible();
+});
+
 test('flags a saved catalog feed when the provider has a newer version', async ({page, context}) => {
   await context.unrouteAll();
   const catalog = await mockCatalog(context, [

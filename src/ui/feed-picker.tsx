@@ -48,9 +48,10 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
     const timer = setTimeout(() => setDebounced(query), 150);
     return () => clearTimeout(timer);
   }, [query]);
-  const search = useMemo(() => searchCatalog(entries, debounced), [entries, debounced]);
+  // Featured entries are always listed above, so search only the rest and the counts match the rows shown.
+  const unfeatured = useMemo(() => entries.filter((entry) => !entry.featured), [entries]);
+  const search = useMemo(() => searchCatalog(unfeatured, debounced), [unfeatured, debounced]);
   const searching = debounced.trim() !== '';
-  const shown = search.results.filter((entry) => !entry.featured);
   const updates = useUpdateChecks(saved, catalog.status === 'ok' ? entries : null);
 
   const row = (entry: CatalogEntry): ReactElement => (
@@ -173,7 +174,7 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
           />
           {searching && (
             <>
-              <ul className="feed-list">{shown.map(row)}</ul>
+              <ul className="feed-list">{search.results.map(row)}</ul>
               {search.total > search.results.length && (
                 <p className="muted">{`Showing ${search.results.length} of ${search.total} — refine your search`}</p>
               )}

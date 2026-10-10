@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "node scripts/catalog/sync.ts --if-missing && vite",
     "catalog:sync": "node scripts/catalog/sync.ts",

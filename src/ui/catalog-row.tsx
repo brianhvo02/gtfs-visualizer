@@ -27,12 +27,27 @@ function DownloadInstructions({
   readonly busy: boolean;
   readonly onImport: (source: ImportSource) => void;
 }): ReactElement {
+  const {access} = entry;
   return (
     <div className="row-expanded">
-      <p className="muted">Download the feed from the provider, then upload it here.</p>
-      <a href={href} target="_blank" rel="noreferrer" aria-label={`Download ${entry.name}`}>
-        Download
-      </a>
+      {access.kind === 'key' ? (
+        <>
+          <p className="muted">
+            Your browser couldn't download this feed directly. Download it from the provider with your key, then upload
+            the file here.
+          </p>
+          <a href={access.signupUrl} target="_blank" rel="noreferrer">
+            Get a key
+          </a>
+        </>
+      ) : (
+        <>
+          <p className="muted">Download the feed from the provider, then upload it here.</p>
+          <a href={href} target="_blank" rel="noreferrer" aria-label={`Download ${entry.name}`}>
+            Download
+          </a>
+        </>
+      )}
       <label className="file-label">
         Upload downloaded file
         <input
