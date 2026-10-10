@@ -56,7 +56,8 @@ An array of featured entries, either a reference or a full entry:
     "name": "Tokyo Metro",
     "place": "Tokyo, Japan",
     "url": "https://api.odpt.org/api/v4/files/TokyoMetro/data/TokyoMetro-Train-GTFS.zip",
-    "access": {"kind": "key", "provider": "odpt", "signupUrl": "https://developer.odpt.org/", "queryParam": "acl:consumerKey"}
+    "access": {"kind": "key", "provider": "odpt", "signupUrl": "https://developer.odpt.org/", "queryParam": "acl:consumerKey"},
+    "license": "https://developer.odpt.org/terms/data_basic_license.html"
   }
 ]
 ```
