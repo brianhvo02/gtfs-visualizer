@@ -18,6 +18,7 @@ import {
   type PaintValue,
   type ScreenPoint,
 } from './adapter.ts';
+import {mapLanguage} from './map-language.ts';
 
 const STYLE_URL = 'mapbox://styles/mapbox/standard';
 const CLICK_TOLERANCE_PX = 6;
@@ -122,7 +123,7 @@ class MapboxAdapter implements MapAdapter {
   }
 
   setLanguage(lang: string | null): void {
-    this.map.setLanguage(lang ?? undefined);
+    this.map.setLanguage(mapLanguage(lang));
   }
 
   fitBounds(bounds: Bounds): void {
