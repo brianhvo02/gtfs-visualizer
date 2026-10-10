@@ -34,6 +34,11 @@ export interface CircleLayerSpec extends LayerBase {
 
 export type LayerSpec = LineLayerSpec | CircleLayerSpec;
 
+export type LightPreset = 'dawn' | 'day' | 'dusk' | 'night';
+
+/** `auto` follows the app's color scheme (night when dark, day otherwise). */
+export type LightSetting = LightPreset | 'auto';
+
 export interface MapFeature {
   readonly layerId: string;
   readonly properties: Readonly<Record<string, unknown>>;
@@ -54,6 +59,7 @@ export interface MapAdapter {
   fitBounds(bounds: Bounds): void;
   /** Sets the base-map label language; null restores the map's default labels. */
   setLanguage(lang: string | null): void;
+  setLightSetting(setting: LightSetting): void;
   onFeatureClick(layerIds: readonly string[], handler: (feature: MapFeature) => void): () => void;
   onFeatureHover(
     layerIds: readonly string[],

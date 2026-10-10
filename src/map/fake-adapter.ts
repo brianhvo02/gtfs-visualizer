@@ -4,6 +4,7 @@ import {
   type Bounds,
   type LayerFilter,
   type LayerSpec,
+  type LightSetting,
   type MapAdapter,
   type MapFeature,
 } from './adapter.ts';
@@ -14,6 +15,7 @@ interface FakeState {
   fitBoundsCount: number;
   lastBounds: Bounds | null;
   language: string | null;
+  lightSetting: LightSetting;
 }
 
 interface ClickEntry {
@@ -27,7 +29,14 @@ class FakeMapAdapter implements MapAdapter {
   private readonly sources = new Map<string, FeatureCollection>();
   private readonly layers: LayerSpec[] = [];
   private readonly clickHandlers = new Set<ClickEntry>();
-  private readonly state: FakeState = {filters: {}, opacity: {}, fitBoundsCount: 0, lastBounds: null, language: null};
+  private readonly state: FakeState = {
+    filters: {},
+    opacity: {},
+    fitBoundsCount: 0,
+    lastBounds: null,
+    language: null,
+    lightSetting: 'auto',
+  };
 
   constructor(container: HTMLElement) {
     this.root = document.createElement('div');
@@ -73,6 +82,11 @@ class FakeMapAdapter implements MapAdapter {
 
   setLanguage(lang: string | null): void {
     this.state.language = lang;
+    this.render();
+  }
+
+  setLightSetting(setting: LightSetting): void {
+    this.state.lightSetting = setting;
     this.render();
   }
 

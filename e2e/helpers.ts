@@ -69,6 +69,7 @@ export interface FakeMapState {
   readonly opacity: Record<string, number>;
   readonly fitBoundsCount: number;
   readonly language: string | null;
+  readonly lightSetting: string;
 }
 
 export async function fakeMapState(page: Page): Promise<FakeMapState> {

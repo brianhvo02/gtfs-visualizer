@@ -11,15 +11,23 @@ import {
   type Bounds,
   type LayerFilter,
   type LayerSpec,
+  type LightPreset,
+  type LightSetting,
   type MapAdapter,
   type MapFeature,
   type PaintValue,
   type ScreenPoint,
 } from './adapter.ts';
 
-const STYLE_URL = 'mapbox://styles/mapbox/light-v11';
+const STYLE_URL = 'mapbox://styles/mapbox/standard';
 const CLICK_TOLERANCE_PX = 6;
 const MAP_LOAD_TIMEOUT_MS = 30_000;
+const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
+
+function resolvePreset(setting: LightSetting, dark: boolean): LightPreset {
+  if (setting !== 'auto') return setting;
+  return dark ? 'night' : 'day';
+}
 
 function toValue(value: PaintValue): string | ExpressionSpecification {
   return typeof value === 'string' ? value : ['get', value.property];
@@ -40,9 +48,17 @@ function toExpression(filter: LayerFilter): ExpressionSpecification {
 
 class MapboxAdapter implements MapAdapter {
   private readonly map: mapboxgl.Map;
+  private readonly darkScheme: MediaQueryList;
+  private lightSetting: LightSetting;
+  private readonly onSchemeChange = (): void => {
+    if (this.lightSetting === 'auto') this.applyLightPreset();
+  };
 
-  constructor(map: mapboxgl.Map) {
+  constructor(map: mapboxgl.Map, darkScheme: MediaQueryList, lightSetting: LightSetting) {
     this.map = map;
+    this.darkScheme = darkScheme;
+    this.lightSetting = lightSetting;
+    darkScheme.addEventListener('change', this.onSchemeChange);
   }
 
   setSource(id: string, data: FeatureCollection): void {
@@ -58,6 +74,8 @@ class MapboxAdapter implements MapAdapter {
     const base = {
       id: spec.id,
       source: spec.source,
+      // Standard style slots: routes sit under place labels, stops above everything so they stay clickable.
+      slot: spec.kind === 'line' ? 'middle' : 'top',
       filter: toExpression(spec.filter ?? {kind: 'all'}),
       ...(spec.minZoom === undefined ? {} : {minzoom: spec.minZoom}),
     };
@@ -70,6 +88,8 @@ class MapboxAdapter implements MapAdapter {
           'line-color': toValue(spec.paint.color),
           'line-width': spec.paint.width,
           'line-opacity': spec.paint.opacity,
+          // Standard's lighting would otherwise darken route colors under the dusk and night presets.
+          'line-emissive-strength': 1,
         },
       });
     } else {
@@ -81,6 +101,7 @@ class MapboxAdapter implements MapAdapter {
           'circle-radius': spec.paint.radius,
           'circle-stroke-color': spec.paint.strokeColor,
           'circle-stroke-width': spec.paint.strokeWidth,
+          'circle-emissive-strength': 1,
         },
       });
     }
@@ -114,6 +135,11 @@ class MapboxAdapter implements MapAdapter {
     );
   }
 
+  setLightSetting(setting: LightSetting): void {
+    this.lightSetting = setting;
+    this.applyLightPreset();
+  }
+
   onFeatureClick(layerIds: readonly string[], handler: (feature: MapFeature) => void): () => void {
     const listener = (event: MapMouseEvent): void => {
       const feature = this.pick(event.point, layerIds);
@@ -144,7 +170,12 @@ class MapboxAdapter implements MapAdapter {
   }
 
   destroy(): void {
+    this.darkScheme.removeEventListener('change', this.onSchemeChange);
     this.map.remove();
+  }
+
+  private applyLightPreset(): void {
+    this.map.setConfigProperty('basemap', 'lightPreset', resolvePreset(this.lightSetting, this.darkScheme.matches));
   }
 
   private pick(point: ScreenPoint, layerIds: readonly string[]): MapFeature | null {
@@ -163,9 +194,20 @@ class MapboxAdapter implements MapAdapter {
 }
 
 /** Resolves once the style has loaded; rejects if Mapbox refuses the token or loading stalls. */
-export function createMapboxAdapter(container: HTMLElement, token: string): Promise<MapAdapter> {
+export function createMapboxAdapter(
+  container: HTMLElement,
+  token: string,
+  lightSetting: LightSetting,
+): Promise<MapAdapter> {
   mapboxgl.accessToken = token;
-  const map = new mapboxgl.Map({container, style: STYLE_URL, center: [-98, 39], zoom: 3});
+  const darkScheme = window.matchMedia(DARK_SCHEME_QUERY);
+  const map = new mapboxgl.Map({
+    container,
+    style: STYLE_URL,
+    config: {basemap: {lightPreset: resolvePreset(lightSetting, darkScheme.matches)}},
+    center: [-98, 39],
+    zoom: 3,
+  });
   return new Promise((resolve, reject) => {
     let settled = false;
     const fail = (error: Error): void => {
@@ -188,7 +230,7 @@ export function createMapboxAdapter(container: HTMLElement, token: string): Prom
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(new MapboxAdapter(map));
+      resolve(new MapboxAdapter(map, darkScheme, lightSetting));
     });
   });
 }

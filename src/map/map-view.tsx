@@ -3,7 +3,7 @@ import type {FeatureCollection} from 'geojson';
 import type {MapLabels} from '../shared/types.ts';
 import type {ResolvedLanguage} from '../state/resolve-language.ts';
 import type {FeedApi} from '../db-client/feed-api.ts';
-import {MapUnavailableError, type MapAdapter} from './adapter.ts';
+import {MapUnavailableError, type LightSetting, type MapAdapter} from './adapter.ts';
 import {createMap} from './create-map.ts';
 import {
   baseLayers,
@@ -14,6 +14,15 @@ import {
   SOURCE_ROUTES,
   SOURCE_STOPS,
 } from './layers.ts';
+import {LIGHT_SETTINGS, loadLightSetting, saveLightSetting} from './light-setting.ts';
+
+const LIGHT_LABELS: Readonly<Record<LightSetting, string>> = {
+  auto: 'Auto',
+  dawn: 'Dawn',
+  day: 'Day',
+  dusk: 'Dusk',
+  night: 'Night',
+};
 
 export interface MapViewProps {
   readonly service: FeedApi;
@@ -65,13 +74,14 @@ export function MapView({
   const pending = language === null;
   const display = language?.display ?? null;
   const query = language?.query ?? null;
+  const [lightSetting, setLightSetting] = useState<LightSetting>(loadLightSetting);
 
   useEffect(() => {
     const container = containerRef.current;
     if (container === null) return;
     let disposed = false;
     let created: MapAdapter | null = null;
-    createMap(container).then(
+    createMap(container, loadLightSetting()).then(
       (map) => {
         if (disposed) {
           map.destroy();
@@ -92,6 +102,10 @@ export function MapView({
       created?.destroy();
     };
   }, []);
+
+  useEffect(() => {
+    adapter?.setLightSetting(lightSetting);
+  }, [adapter, lightSetting]);
 
   useEffect(() => {
     if (adapter === null) return;
@@ -192,6 +206,24 @@ export function MapView({
   return (
     <div className="map-area">
       <div ref={containerRef} className="map-container" />
+      {adapter !== null && (
+        <select
+          className="map-lighting"
+          aria-label="Map lighting"
+          value={lightSetting}
+          onChange={(event) => {
+            const setting = LIGHT_SETTINGS.find((s) => s === event.target.value) ?? 'auto';
+            setLightSetting(setting);
+            saveLightSetting(setting);
+          }}
+        >
+          {LIGHT_SETTINGS.map((setting) => (
+            <option key={setting} value={setting}>
+              {LIGHT_LABELS[setting]}
+            </option>
+          ))}
+        </select>
+      )}
       {error !== null && (
         <p role="status" className="map-notice">
           {error}

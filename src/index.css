@@ -69,8 +69,10 @@ input[type='search'], input[type='url'], select { width: 100%; padding: 6px 8px;
 .counts th { text-align: left; font-weight: normal; color: var(--muted); padding-right: 12px; }
 
 .map-area { position: relative; min-height: 300px; }
-.map-container { position: absolute; inset: 0; }
+/* Outranks mapbox-gl.css's `.mapboxgl-map { position: relative }`, which loads later and would collapse the container to 0px tall. */
+.map-area > .map-container { position: absolute; inset: 0; }
 .map-notice { position: absolute; top: 12px; left: 12px; right: 12px; margin: 0; padding: 8px 12px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border); }
+.map-area > .map-lighting { position: absolute; top: 12px; right: 12px; width: auto; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2); }
 .map-tooltip { position: absolute; pointer-events: none; padding: 2px 6px; border-radius: 4px; background: rgba(15, 23, 42, 0.85); color: #fff; font-size: 0.8rem; }
 .fake-map { position: absolute; inset: 0; overflow: auto; padding: 8px; font-size: 0.8rem; }
 

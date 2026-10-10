@@ -27,6 +27,18 @@ test('selects a stop from the map and lists departures', async ({page}) => {
   await expect(page.locator('aside').getByRole('heading', {name: 'Beatty Airport'})).toBeVisible();
 });
 
+test('remembers the chosen map lighting across reloads', async ({page}) => {
+  await page.goto('/');
+  const lighting = page.getByRole('combobox', {name: 'Map lighting'});
+  await expect(lighting).toHaveValue('auto');
+  await expect.poll(async () => (await fakeMapState(page)).lightSetting).toBe('auto');
+  await lighting.selectOption('dusk');
+  await expect.poll(async () => (await fakeMapState(page)).lightSetting).toBe('dusk');
+  await page.reload();
+  await expect(page.getByRole('combobox', {name: 'Map lighting'})).toHaveValue('dusk');
+  await expect.poll(async () => (await fakeMapState(page)).lightSetting).toBe('dusk');
+});
+
 test('shows a station’s departures for a date and restores the view on reload', async ({page}) => {
   await page.goto('/');
   await uploadSample(page);
