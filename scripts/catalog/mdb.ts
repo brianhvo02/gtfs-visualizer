@@ -1,3 +1,4 @@
+import {FEED_ID_PATTERN} from '../../src/catalog/catalog-types.ts';
 import type {Access, Bbox, CatalogEntry} from '../../src/catalog/catalog-types.ts';
 import {parseCsv} from './csv.ts';
 
@@ -112,14 +113,30 @@ function mapRow(row: Record<string, string>): CatalogEntry | null {
   };
 }
 
-export function mapMobilityDatabaseRows(rows: readonly Record<string, string>[]): CatalogEntry[] {
+export interface MappedRows {
+  readonly entries: CatalogEntry[];
+  readonly skipped: {readonly invalidId: number; readonly duplicateId: number};
+}
+
+export function mapMobilityDatabaseRows(rows: readonly Record<string, string>[]): MappedRows {
   const entries: CatalogEntry[] = [];
+  const seen = new Set<string>();
+  let invalidId = 0;
+  let duplicateId = 0;
   for (const row of rows) {
     if (row['data_type'] !== 'gtfs') continue;
     const status = row['status'] ?? '';
     if (status !== 'active' && status !== '') continue;
     const entry = mapRow(row);
-    if (entry !== null) entries.push(entry);
+    if (entry === null) continue;
+    if (!FEED_ID_PATTERN.test(entry.id)) {
+      invalidId++;
+    } else if (seen.has(entry.id)) {
+      duplicateId++;
+    } else {
+      seen.add(entry.id);
+      entries.push(entry);
+    }
   }
-  return entries;
+  return {entries, skipped: {invalidId, duplicateId}};
 }

@@ -40,6 +40,8 @@ export type CuratedEntry =
   | {readonly entry: CatalogEntry};
 
 export const CATALOG_PATH = '/catalog.json';
+/** Ids of every catalog entry: they become OPFS file names and ?feed= values. */
+export const FEED_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 export const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,6 +113,7 @@ function parseFullEntry(
   if (checkId && !ID_PATTERN.test(id)) {
     throw new Error(`${where}: "id" "${id}" is invalid (use lowercase letters, digits, and dashes)`);
   }
+  if (!FEED_ID_PATTERN.test(id)) throw new Error(`${where}: "id" "${id}" is invalid (use letters, digits, dashes, and underscores)`);
   return {
     id,
     name: requireString(item, 'name', where),
@@ -155,10 +158,13 @@ export function parseCatalogSnapshot(json: unknown): CatalogSnapshot {
   const generatedAt = requireString(root, 'generatedAt', 'catalog.json');
   const rawEntries = root['entries'];
   if (!Array.isArray(rawEntries)) throw new Error('catalog.json: "entries" must be an array');
+  const seen = new Set<string>();
   const entries = rawEntries.map((raw: unknown, index): CatalogEntry => {
     const where = `catalog.json entry ${index}`;
     const item = requireRecord(raw, where);
     const entry = parseFullEntry(item, where, item['featured'] === true, false);
+    if (seen.has(entry.id)) throw new Error(`${where}: duplicate id "${entry.id}"`);
+    seen.add(entry.id);
     return {...entry, viaMobilityDatabase: item['viaMobilityDatabase'] === true};
   });
   return {generatedAt, entries};

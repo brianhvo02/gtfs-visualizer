@@ -70,4 +70,13 @@ describe('parseCatalogSnapshot', () => {
     const {url: _url, ...noUrl} = entry;
     expect(() => parseCatalogSnapshot({generatedAt: 'x', entries: [entry, noUrl]})).toThrow(/entry 1.*url/);
   });
+
+  it('rejects unsafe and duplicate ids', () => {
+    const base = {
+      name: 'N', place: 'P', url: 'https://x/a.zip', originalUrl: null, access: {kind: 'direct'},
+      license: null, bbox: null, featured: false, viaMobilityDatabase: true,
+    };
+    expect(() => parseCatalogSnapshot({generatedAt: 'x', entries: [{...base, id: 'ok'}, {...base, id: 'a/b'}]})).toThrow(/entry 1.*id/);
+    expect(() => parseCatalogSnapshot({generatedAt: 'x', entries: [{...base, id: 'Ok_1'}, {...base, id: 'Ok_1'}]})).toThrow(/entry 1.*duplicate id/);
+  });
 });

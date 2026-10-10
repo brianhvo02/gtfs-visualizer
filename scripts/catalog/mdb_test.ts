@@ -16,20 +16,31 @@ function row(overrides: Record<string, string> = {}): Record<string, string> {
 }
 
 function one(overrides: Record<string, string>) {
-  const [entry] = mapMobilityDatabaseRows([row(overrides)]);
+  const [entry] = mapMobilityDatabaseRows([row(overrides)]).entries;
   if (!entry) throw new Error('row was dropped');
   return entry;
 }
 
 describe('mapMobilityDatabaseRows', () => {
   it('drops inactive, deprecated, and non-gtfs rows; keeps empty status', () => {
-    const entries = mapMobilityDatabaseRows([
+    const {entries} = mapMobilityDatabaseRows([
       row({id: 'a', status: 'inactive'}),
       row({id: 'b', status: 'deprecated'}),
       row({id: 'c', data_type: 'gtfs_rt'}),
       row({id: 'd', status: ''}),
     ]);
     expect(entries.map((e) => e.id)).toEqual(['d']);
+  });
+
+  it('skips unsafe and duplicate ids, keeping the first', () => {
+    const {entries, skipped} = mapMobilityDatabaseRows([
+      row({id: 'ok', name: 'first'}),
+      row({id: 'a/b'}),
+      row({id: 'a b'}),
+      row({id: 'ok', name: 'second'}),
+    ]);
+    expect(entries.map((e) => e.name)).toEqual(['Prov — first']);
+    expect(skipped).toEqual({invalidId: 2, duplicateId: 1});
   });
 
   it('maps no-auth feeds with a latest copy to direct', () => {
