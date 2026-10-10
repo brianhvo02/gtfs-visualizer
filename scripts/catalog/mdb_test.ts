@@ -22,6 +22,22 @@ function one(overrides: Record<string, string>) {
 }
 
 describe('mapMobilityDatabaseRows', () => {
+  it('upgrades api.511.org links to https so an https site can fetch them', () => {
+    const entry = one({
+      'urls.direct_download': 'http://api.511.org/transit/datafeeds?operator_id=SM',
+      'urls.authentication_type': '1',
+      'urls.authentication_info': 'https://511.org/open-data/token',
+      'urls.api_key_parameter_name': 'api_key',
+    });
+    expect(entry.url).toBe('https://api.511.org/transit/datafeeds?operator_id=SM');
+    expect(entry.originalUrl).toBe('https://api.511.org/transit/datafeeds?operator_id=SM');
+    expect(entry.access).toMatchObject({kind: 'key', provider: 'api.511.org'});
+  });
+
+  it('leaves other http links alone', () => {
+    expect(one({'urls.direct_download': 'http://web.mta.info/feed.zip'}).originalUrl).toBe('http://web.mta.info/feed.zip');
+  });
+
   it('marks feeds official only when Mobility Database says so', () => {
     expect(one({is_official: 'True'}).official).toBe(true);
     expect(one({is_official: 'true'}).official).toBe(true);

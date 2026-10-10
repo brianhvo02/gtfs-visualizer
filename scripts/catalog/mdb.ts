@@ -52,6 +52,14 @@ function hostOf(url: string | null): string {
   }
 }
 
+/** Hosts that serve the same URLs over https; Mobility Database lists some of them as http, which an https site can't fetch. */
+const HTTPS_HOSTS: ReadonlySet<string> = new Set(['api.511.org']);
+
+function preferHttps(url: string | null): string | null {
+  if (url === null || !url.startsWith('http://')) return url;
+  return HTTPS_HOSTS.has(hostOf(url)) ? `https://${url.slice('http://'.length)}` : url;
+}
+
 function bboxOf(row: Record<string, string>): Bbox | null {
   const get = (key: string): number | null => {
     const value = nonEmpty(row[`location.bounding_box.${key}`]);
@@ -77,7 +85,7 @@ function mapRow(row: Record<string, string>): CatalogEntry | null {
     .map((key) => nonEmpty(row[key]))
     .filter((part): part is string => part !== null)
     .join(', ');
-  const direct = nonEmpty(row['urls.direct_download']);
+  const direct = preferHttps(nonEmpty(row['urls.direct_download']));
   const latest = nonEmpty(row['urls.latest']);
   const authType = nonEmpty(row['urls.authentication_type']);
   const signupUrl = nonEmpty(row['urls.authentication_info']);
