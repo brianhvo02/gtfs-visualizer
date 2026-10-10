@@ -1,11 +1,29 @@
 import {describe, expect, it} from 'vitest';
-import {describeProgress, formatBytes, formatDeparture, formatServiceDate, languageName} from './format.ts';
+import {
+  describeProgress,
+  feedDisplayName,
+  formatBytes,
+  formatDeparture,
+  formatServiceDate,
+  languageName,
+} from './format.ts';
 
 describe('format', () => {
   it('names languages in their own language, falling back to the code', () => {
     expect(languageName('fr')).toBe('français');
     expect(languageName('not a code!')).toBe('not a code!');
   });
+  it('shows the translated agency name only when the feed is named after the agency', () => {
+    expect(feedDisplayName('Demo Transit Authority', 'Demo Transit Authority', 'Régie de transport démo')).toBe(
+      'Régie de transport démo',
+    );
+    expect(feedDisplayName('Bay Area (catalog)', 'Demo Transit Authority', 'Régie de transport démo')).toBe(
+      'Bay Area (catalog)',
+    );
+    expect(feedDisplayName('Demo Transit Authority', 'Demo Transit Authority', undefined)).toBe('Demo Transit Authority');
+    expect(feedDisplayName('Demo Transit Authority', undefined, 'Régie de transport démo')).toBe('Demo Transit Authority');
+  });
+
   it('formats service dates', () => {
     expect(formatServiceDate('20261012')).toBe('Oct 12, 2026');
     expect(formatServiceDate(null)).toBe('—');

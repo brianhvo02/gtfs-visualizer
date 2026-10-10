@@ -8,6 +8,7 @@ import {useSelection, type Selection, type UpdateSelection} from './state/url-st
 import {ErrorMessage} from './ui/error-message.tsx';
 import {FeedInfo} from './ui/feed-info.tsx';
 import {FeedPicker} from './ui/feed-picker.tsx';
+import {feedDisplayName} from './ui/format.ts';
 import {HostNotice} from './ui/host-notice.tsx';
 import {LanguageSelect} from './ui/language-select.tsx';
 import {RouteDetailView} from './ui/route-detail.tsx';
@@ -195,7 +196,13 @@ function FeedContent({
   }
   return (
     <>
-      <p className="feed-name">{feed.name}</p>
+      <p className="feed-name">
+        {feedDisplayName(
+          feed.name,
+          base.value.agencies[0]?.name,
+          summary.status === 'ok' ? summary.value.agencies[0]?.name : undefined,
+        )}
+      </p>
       {routes.status === 'loading' && <p className="muted">Loading routes…</p>}
       {routes.status === 'error' && <ErrorMessage error={routes.error} />}
       {routes.status === 'ok' && <RouteList routes={routes.value} onSelect={onSelectRoute} />}

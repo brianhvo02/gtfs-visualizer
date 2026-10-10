@@ -13,4 +13,13 @@ Notes:
 
 ## Translated queries
 
-Not measured yet: no real feed with `translations.txt` was at hand. To measure, run `npm run perf -- <feed with translations.txt>`; it prints a second table with milliseconds for `getMapLabels` and `getStopDepartures` (busiest stop, first day of service) with no language and with the feed's first non-original language.
+Measured on 2026-10-09 in WSL2 (Linux 6.18, x86_64), Node v26.5.0, with `npm run perf -- <feed.zip>`. Each query ran once; the untranslated run goes first and absorbs cold-start cost, so treat these as indicative.
+
+| Feed | Zip size | stop_times rows | Translations | Language | Busiest stop | Date | `getMapLabels` (original / translated) | `getStopDepartures` (original / translated) |
+|------|----------|-----------------|--------------|----------|--------------|------|----------------------------------------|---------------------------------------------|
+| Tokyo Metro (ODPT, feed_version 20261008) | 1.1 MB | 176,385 | 494 rows, all matched by `field_value` | en (original ja) | 209 | 20260919 | 3.0 ms / 1.3 ms | 10.6 ms / 9.8 ms |
+
+Notes:
+- The import itself took 1.8 s (1.7 s load+index, 0.1 s derive), 20.9 MB DB, 0 issues.
+- The busiest stop is a platform-level stop, so the parent-station path is not timed, and the date is the feed's first service day, which may be lighter than a weekday.
+- To re-measure, run `npm run perf -- <feed with translations.txt>`.

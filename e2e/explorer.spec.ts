@@ -97,6 +97,7 @@ test('shows a feed in a chosen language and keeps it on reload', async ({page}) 
   const sidebar = page.locator('aside');
   await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();
   expect((await fakeMapState(page)).fitBoundsCount).toBe(fitsBefore);
+  await expect(sidebar.locator('.feed-name')).toHaveText('Régie de transport démo');
   await page.reload();
   await expect(page.getByRole('combobox', {name: 'Language'})).toHaveValue('fr');
   await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();

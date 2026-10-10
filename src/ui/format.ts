@@ -52,3 +52,15 @@ export function languageName(code: string): string {
     return code;
   }
 }
+
+/**
+ * Feeds imported from a URL or file are named after their agency at import time; show that name in the
+ * chosen language. Curated (catalog) names differ from the agency name and are kept as they are.
+ */
+export function feedDisplayName(
+  feedName: string,
+  originalAgency: string | undefined,
+  translatedAgency: string | undefined,
+): string {
+  return feedName === originalAgency && translatedAgency !== undefined ? translatedAgency : feedName;
+}
