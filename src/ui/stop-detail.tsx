@@ -10,6 +10,7 @@ export interface StopDetailViewProps {
   readonly service: FeedApi;
   readonly feedId: string;
   readonly stopId: string;
+  readonly lang: string | null;
   /** YYYYMMDD from the URL, or null for today in the feed's time zone. */
   readonly date: string | null;
   readonly timezone: string | null;
@@ -22,6 +23,7 @@ export function StopDetailView({
   service,
   feedId,
   stopId,
+  lang,
   date,
   timezone,
   onBack,
@@ -33,10 +35,10 @@ export function StopDetailView({
   // oxlint-disable-next-line react/purity
   const today = useMemo(() => todayInTimeZone(timezone, new Date()), [timezone]);
   const serviceDate = date ?? today;
-  const detail = useAsync(() => service.getStopDetail(feedId, stopId, null), [service, feedId, stopId]);
+  const detail = useAsync(() => service.getStopDetail(feedId, stopId, lang), [service, feedId, stopId, lang]);
   const departures = useAsync(
-    () => service.getStopDepartures(feedId, stopId, serviceDate, null),
-    [service, feedId, stopId, serviceDate],
+    () => service.getStopDepartures(feedId, stopId, serviceDate, lang),
+    [service, feedId, stopId, serviceDate, lang],
   );
   const back = (
     <button type="button" className="link" onClick={onBack}>

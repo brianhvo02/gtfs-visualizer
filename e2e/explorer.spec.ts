@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test';
-import {fakeMapState, mockCatalog, sampleZip, uploadSample} from './helpers.ts';
+import {fakeMapState, mockCatalog, sampleZip, uploadSample, uploadTranslatedSample} from './helpers.ts';
 
 test.beforeEach(async ({context}) => {
   await mockCatalog(context, []);
@@ -82,4 +82,24 @@ test('a second tab can take over from the first', async ({context}) => {
   await second.getByRole('button', {name: 'Take over'}).click();
   await expect(second.getByRole('heading', {name: 'Choose a feed'})).toBeVisible({timeout: 15_000});
   await expect(first.getByText('opened in another tab')).toBeVisible();
+});
+
+test('shows a feed in a chosen language and keeps it on reload', async ({page}) => {
+  await page.goto('/');
+  await uploadTranslatedSample(page);
+  const language = page.getByRole('combobox', {name: 'Language'});
+  await expect(language).toHaveValue('original');
+  await language.selectOption('fr');
+  await expect(page).toHaveURL(/lang=fr/);
+  const sidebar = page.locator('aside');
+  await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('combobox', {name: 'Language'})).toHaveValue('fr');
+  await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();
+});
+
+test('has no language selector for a feed without translations', async ({page}) => {
+  await page.goto('/');
+  await uploadSample(page);
+  await expect(page.getByRole('combobox', {name: 'Language'})).toHaveCount(0);
 });

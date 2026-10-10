@@ -1,7 +1,11 @@
 import {describe, expect, it} from 'vitest';
-import {describeProgress, formatBytes, formatDeparture, formatServiceDate} from './format.ts';
+import {describeProgress, formatBytes, formatDeparture, formatServiceDate, languageName} from './format.ts';
 
 describe('format', () => {
+  it('names languages in their own language, falling back to the code', () => {
+    expect(languageName('fr')).toBe('français');
+    expect(languageName('not a code!')).toBe('not a code!');
+  });
   it('formats service dates', () => {
     expect(formatServiceDate('20261012')).toBe('Oct 12, 2026');
     expect(formatServiceDate(null)).toBe('—');

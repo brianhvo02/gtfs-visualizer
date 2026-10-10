@@ -1,5 +1,5 @@
 import {expect, type BrowserContext, type Page} from '@playwright/test';
-import {makeZip, SAMPLE_FEED} from '../src/test-fixtures/sample-feed.ts';
+import {makeZip, SAMPLE_FEED, TRANSLATED_FEED} from '../src/test-fixtures/sample-feed.ts';
 
 export const CATALOG_BASE = 'https://catalog.test';
 const CORS = {'access-control-allow-origin': '*'};
@@ -51,6 +51,16 @@ export async function uploadSample(page: Page): Promise<void> {
     buffer: sampleZip(),
   });
   await expect(page).toHaveURL(/feed=file-demo-transit/, {timeout: 30_000});
+  await expect(page.locator('aside').getByRole('heading', {name: 'Routes'})).toBeVisible();
+}
+
+export async function uploadTranslatedSample(page: Page): Promise<void> {
+  await page.getByTestId('file-input').setInputFiles({
+    name: 'demo-translated.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from(makeZip(TRANSLATED_FEED)),
+  });
+  await expect(page).toHaveURL(/feed=file-demo-translated/, {timeout: 30_000});
   await expect(page.locator('aside').getByRole('heading', {name: 'Routes'})).toBeVisible();
 }
 

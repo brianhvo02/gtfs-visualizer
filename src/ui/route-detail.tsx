@@ -8,6 +8,7 @@ export interface RouteDetailViewProps {
   readonly service: FeedApi;
   readonly feedId: string;
   readonly routeId: string;
+  readonly lang: string | null;
   readonly onBack: () => void;
   readonly onSelectStop: (stopId: string) => void;
   /**
@@ -21,11 +22,12 @@ export function RouteDetailView({
   service,
   feedId,
   routeId,
+  lang,
   onBack,
   onSelectStop,
   onPatternStops,
 }: RouteDetailViewProps): ReactElement {
-  const state = useAsync(() => service.getRouteDetail(feedId, routeId, null), [service, feedId, routeId]);
+  const state = useAsync(() => service.getRouteDetail(feedId, routeId, lang), [service, feedId, routeId, lang]);
   const [patternId, setPatternId] = useState<string | null>(null);
   const detail = state.status === 'ok' ? state.value : null;
   const pattern =

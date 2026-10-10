@@ -43,3 +43,12 @@ export function describeProgress(progress: ImportProgress): string {
       return 'Saving…';
   }
 }
+
+/** Names a language in that language, falling back to the code itself. */
+export function languageName(code: string): string {
+  try {
+    return new Intl.DisplayNames([code], {type: 'language'}).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}

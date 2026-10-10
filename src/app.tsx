@@ -2,12 +2,14 @@ import {useCallback, useEffect, useState, useSyncExternalStore, type ReactElemen
 import type {FeedApi} from './db-client/feed-api.ts';
 import {host} from './db-client/host.ts';
 import {MapView} from './map/map-view.tsx';
-import type {FeedRecord} from './shared/types.ts';
+import type {FeedLanguages, FeedRecord} from './shared/types.ts';
+import {ORIGINAL_LANGUAGE, resolveLanguage} from './state/resolve-language.ts';
 import {useSelection, type Selection, type UpdateSelection} from './state/url-state.ts';
 import {ErrorMessage} from './ui/error-message.tsx';
 import {FeedInfo} from './ui/feed-info.tsx';
 import {FeedPicker} from './ui/feed-picker.tsx';
 import {HostNotice} from './ui/host-notice.tsx';
+import {LanguageSelect} from './ui/language-select.tsx';
 import {RouteDetailView} from './ui/route-detail.tsx';
 import {RouteList} from './ui/route-list.tsx';
 import {StopDetailView} from './ui/stop-detail.tsx';
@@ -39,6 +41,14 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
     [service, feedId],
   );
   const activeFeed = feed.status === 'ok' && feed.value !== null && feed.value.id === feedId ? feed.value : null;
+  const activeFeedId = activeFeed?.id ?? null;
+  const languages = useAsync(
+    async () => (activeFeedId === null ? null : await service.getFeedLanguages(activeFeedId)),
+    [service, activeFeedId],
+  );
+  const feedLanguages: FeedLanguages | null = languages.status === 'ok' ? languages.value : null;
+  const resolved =
+    feedLanguages === null ? null : resolveLanguage(selection.lang, navigator.languages, feedLanguages);
 
   useEffect(() => {
     if (feedId !== null && feed.status === 'ok' && feed.value === null) {
@@ -64,7 +74,9 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
     content = <FeedPicker service={service} catalogBaseUrl={CATALOG_BASE_URL} onOpen={openFeed} />;
   } else if (feed.status === 'error') {
     content = <ErrorMessage error={feed.error} />;
-  } else if (activeFeed === null) {
+  } else if (languages.status === 'error') {
+    content = <ErrorMessage error={languages.error} />;
+  } else if (activeFeed === null || resolved === null) {
     content = <p className="muted">Opening feed…</p>;
   } else {
     content = (
@@ -72,6 +84,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
         service={service}
         feed={activeFeed}
         selection={selection}
+        lang={resolved.query}
         update={update}
         onSelectRoute={selectRoute}
         onSelectStop={selectStop}
@@ -89,6 +102,13 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
             <button type="button" className="link" onClick={() => update({feed: null})}>
               Change feed
             </button>
+          )}
+          {feedLanguages !== null && (
+            <LanguageSelect
+              languages={feedLanguages}
+              value={resolved?.query ?? ORIGINAL_LANGUAGE}
+              onChange={(lang) => update({lang}, {replace: true})}
+            />
           )}
         </header>
         {notice !== null && (
@@ -118,6 +138,7 @@ interface FeedContentProps {
   readonly service: FeedApi;
   readonly feed: FeedRecord;
   readonly selection: Selection;
+  readonly lang: string | null;
   readonly update: UpdateSelection;
   readonly onSelectRoute: (routeId: string) => void;
   readonly onSelectStop: (stopId: string) => void;
@@ -128,13 +149,14 @@ function FeedContent({
   service,
   feed,
   selection,
+  lang,
   update,
   onSelectRoute,
   onSelectStop,
   onPatternStops,
 }: FeedContentProps): ReactElement {
-  const summary = useAsync(() => service.getFeedSummary(feed.id, null), [service, feed.id]);
-  const routes = useAsync(() => service.getRoutes(feed.id, null), [service, feed.id]);
+  const summary = useAsync(() => service.getFeedSummary(feed.id, lang), [service, feed.id, lang]);
+  const routes = useAsync(() => service.getRoutes(feed.id, lang), [service, feed.id, lang]);
 
   if (summary.status === 'loading') return <p className="muted">Loading feed…</p>;
   if (summary.status === 'error') return <ErrorMessage error={summary.error} />;
@@ -144,6 +166,7 @@ function FeedContent({
       <StopDetailView
         service={service}
         feedId={feed.id}
+        lang={lang}
         stopId={selection.stop}
         date={selection.date}
         timezone={summary.value.timezone}
@@ -158,6 +181,7 @@ function FeedContent({
       <RouteDetailView
         service={service}
         feedId={feed.id}
+        lang={lang}
         routeId={selection.route}
         onBack={() => update({route: null})}
         onSelectStop={onSelectStop}
