@@ -25,7 +25,7 @@ E2E uses `.env.e2e` (`VITE_MAP_PROVIDER=fake`, `VITE_CATALOG_BASE_URL=https://ca
 
 Fully client-side app (static hosting, no backend, no COOP/COEP headers). Design spec: `docs/superpowers/specs/2026-10-09-feed-import-and-explorer-design.md`; deployment (Cloudflare Pages + R2, GitHub Action): `docs/deploy.md`.
 
-**Worker owns all data.** `src/worker/worker.ts` runs `@sqlite.org/sqlite-wasm` with the `opfs-sahpool` VFS and exposes a `FeedService` (`src/worker/feed-service.ts`) via Comlink. The UI only sees `FeedApi = Remote<FeedService>` (`src/db-client/feed-api.ts`) — every method is async, and UI code never writes SQL. UI-side modules may import from `src/worker` with `import type` only (exception: `src/db-client/host.ts`, which references the worker entry URL).
+**Worker owns all data.** `src/worker/worker.ts` runs `@sqlite.org/sqlite-wasm` with the `opfs-sahpool` VFS and exposes a `FeedService` (`src/worker/feed-service.ts`) via Comlink. The UI only sees `FeedApi = Remote<FeedService>` (`src/db-client/feed-api.ts`) — every method is async, and UI code never writes SQL. UI-side modules may import from `src/worker` with `import type` only (exception: `src/db-client/host.ts`, which references the worker entry URL); types and constants needed on both sides (import issues/progress, `STORAGE_HEADROOM`) live in `src/shared/`.
 
 **Worker lifecycle** (`src/db-client/worker-host.ts`): one tab at a time holds a Web Lock (`gtfs-visualizer-db`); a second tab shows "open in another tab" and can steal it, and the losing tab terminates its worker to release OPFS handles. A worker crash triggers one restart; `HostState.ready.generation` increments on every restart and `app.tsx` keys `<Explorer>` by it so in-flight UI state resets.
 
