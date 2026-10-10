@@ -1,6 +1,7 @@
 import type {FeatureCollection, LineString, Point} from 'geojson';
 import type {
   Departure,
+  FeedLanguages,
   FeedRecord,
   FeedSourceKind,
   FeedSummary,
@@ -210,6 +211,10 @@ export class FeedService {
 
   getFeedSummary(feedId: string): FeedSummary {
     return queries.getFeedSummary(this.dbFor(feedId));
+  }
+
+  getFeedLanguages(feedId: string): FeedLanguages {
+    return queries.getFeedLanguages(this.dbFor(feedId));
   }
 
   getRoutes(feedId: string): RouteSummary[] {

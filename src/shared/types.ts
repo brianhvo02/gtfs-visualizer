@@ -179,3 +179,8 @@ export interface StorageCheck {
   readonly ok: boolean;
   readonly availableBytes: number | null;
 }
+
+export interface FeedLanguages {
+  readonly languages: readonly string[];
+  readonly originalLanguage: string | null;
+}

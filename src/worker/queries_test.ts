@@ -1,7 +1,9 @@
 import {beforeAll, describe, expect, it} from 'vitest';
 import {CATEGORY_COLORS} from '../gtfs/route-types.ts';
+import {SAMPLE_TRANSLATIONS, TRANSLATED_FEED, withFile, withoutFile} from '../test-fixtures/sample-feed.ts';
 import {loadSampleDb} from '../test-fixtures/sample-db.ts';
 import {
+  getFeedLanguages,
   getFeedSummary,
   getRouteDetail,
   getRoutes,
@@ -109,5 +111,30 @@ describe('queries', () => {
     expect(summary.serviceStart).toBe('20260101');
     expect(summary.timezone).toBe('America/Los_Angeles');
     expect(summary.issueCount).toBe(0);
+  });
+});
+
+describe('getFeedLanguages', () => {
+  it('lists the original language first, then translations sorted, de-duplicated by case', async () => {
+    const {db} = await loadSampleDb(TRANSLATED_FEED);
+    expect(getFeedLanguages(db)).toEqual({languages: ['en', 'DE', 'fr'], originalLanguage: 'en'});
+  });
+  it('has no original language for mul or missing feed_lang', async () => {
+    const mul = withFile('feed_info.txt', 'feed_publisher_name,feed_publisher_url,feed_lang\nP,https://example.com,mul\n');
+    expect(getFeedLanguages((await loadSampleDb({...mul, 'translations.txt': SAMPLE_TRANSLATIONS})).db)).toEqual({
+      languages: ['DE', 'fr'],
+      originalLanguage: null,
+    });
+    const none = {...withoutFile('feed_info.txt'), 'translations.txt': SAMPLE_TRANSLATIONS};
+    expect(getFeedLanguages((await loadSampleDb(none)).db).originalLanguage).toBeNull();
+  });
+  it('keeps the original spelling when a translation repeats it in another case', async () => {
+    const files = {...TRANSLATED_FEED, 'translations.txt': 'table_name,field_name,language,translation,record_id\nstops,stop_name,EN,X,STN\n'};
+    expect(getFeedLanguages((await loadSampleDb(files)).db).languages).toEqual(['en']);
+  });
+  it('reports no languages for a feed imported before translations existed', async () => {
+    const {db} = await loadSampleDb();
+    db.exec("DELETE FROM feed_summary WHERE key IN ('languages', 'original_language'); DROP TABLE translations;");
+    expect(getFeedLanguages(db)).toEqual({languages: [], originalLanguage: null});
   });
 });

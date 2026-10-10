@@ -10,6 +10,7 @@ import {activeServiceIds, type CalendarDateRow, type CalendarRow} from '../gtfs/
 import {addDays} from '../gtfs/time.ts';
 import type {
   Departure,
+  FeedLanguages,
   FeedSummary,
   RouteDetail,
   RouteShapeProps,
@@ -227,6 +228,23 @@ export function getStopDepartures(db: Database, stopId: string, serviceDate: str
     ...db.selectObjects(DEPARTURES_SQL, [stopId, JSON.stringify(today), 0]).map((row) => toDeparture(row, 0)),
   ];
   return result.sort((a, b) => a.departureSecs - b.departureSecs || a.tripId.localeCompare(b.tripId));
+}
+
+export function getFeedLanguages(db: Database): FeedLanguages {
+  const rows = new Map(
+    db.selectObjects("SELECT key, value FROM feed_summary WHERE key IN ('languages', 'original_language')").map((row) => [
+      asString(row['key']) ?? '',
+      asString(row['value']),
+    ]),
+  );
+  let languages: string[] = [];
+  try {
+    const parsed: unknown = JSON.parse(rows.get('languages') ?? '[]');
+    if (Array.isArray(parsed)) languages = parsed.filter((v): v is string => typeof v === 'string');
+  } catch {
+    languages = [];
+  }
+  return {languages, originalLanguage: rows.get('original_language') ?? null};
 }
 
 export function getFeedSummary(db: Database): FeedSummary {

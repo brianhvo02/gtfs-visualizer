@@ -202,6 +202,26 @@ function buildSummary(db: Database, issues: IssueCollector): void {
       message: `"${timeZone ?? ''}" is not a valid time zone; the browser's time zone will be used.`,
     });
   }
+  const feedLang = asString(db.selectValue('SELECT feed_lang FROM feed_info LIMIT 1'))?.trim() ?? '';
+  const original = feedLang !== '' && feedLang.toLowerCase() !== 'mul' ? feedLang : null;
+  const seen = new Set<string>(original === null ? [] : [original.toLowerCase()]);
+  const others: string[] = [];
+  const translated = db
+    .selectValues('SELECT DISTINCT language FROM translations')
+    .map((value) => asString(value))
+    .filter((value): value is string => value !== null && value !== '')
+    .sort((a, b) => {
+      const la = a.toLowerCase();
+      const lb = b.toLowerCase();
+      return la < lb ? -1 : la > lb ? 1 : a < b ? -1 : a > b ? 1 : 0;
+    });
+  for (const language of translated) {
+    if (seen.has(language.toLowerCase())) continue;
+    seen.add(language.toLowerCase());
+    others.push(language);
+  }
+  insert.bind(['languages', JSON.stringify(original === null ? others : [original, ...others])]).stepReset();
+  if (original !== null) insert.bind(['original_language', original]).stepReset();
   insert.finalize();
 }
 
