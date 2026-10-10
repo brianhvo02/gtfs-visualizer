@@ -3,11 +3,14 @@ import {beforeEach, describe, expect, it} from 'vitest';
 import type {ImportProgress} from '../shared/types.ts';
 import {
   makeZip,
+  LEGACY_TRANSLATIONS,
   SAMPLE_FEED,
   streamOf,
+  TRANSLATED_FEED,
   withFile,
   withoutFile,
 } from '../test-fixtures/sample-feed.ts';
+import {loadSampleDb} from '../test-fixtures/sample-db.ts';
 import {openMemoryDb} from '../test-fixtures/test-db.ts';
 import {createGtfsTables} from './ddl.ts';
 import {IssueCollector} from './issues.ts';
@@ -171,5 +174,32 @@ describe('loadGtfsZip', () => {
     expect(db.selectValues("SELECT name FROM sqlite_master WHERE type = 'index'")).toContain(
       'idx_stop_times_stop_id',
     );
+  });
+
+  it('imports translations and skips invalid rows', async () => {
+    const {db: tdb} = await loadSampleDb(TRANSLATED_FEED);
+    expect(tdb.selectValue('SELECT count(*) FROM translations')).toBe(12); // 14 data rows - lines 12, 13
+    const invalid = tdb.selectObjects(
+      "SELECT line, code, severity FROM import_issues WHERE file = 'translations.txt' ORDER BY line",
+    );
+    expect(invalid).toEqual([
+      {line: 12, code: 'invalid_value', severity: 'error'},
+      {line: 13, code: 'invalid_value', severity: 'error'},
+      {line: 14, code: 'missing_value', severity: 'error'},
+    ]);
+  });
+
+  it('ignores a legacy translations file with one warning', async () => {
+    const {db: tdb} = await loadSampleDb(withFile('translations.txt', LEGACY_TRANSLATIONS));
+    expect(tdb.selectValue('SELECT count(*) FROM translations')).toBe(0);
+    expect(
+      tdb.selectObjects("SELECT code, severity, message FROM import_issues WHERE file = 'translations.txt'"),
+    ).toEqual([
+      {
+        code: 'legacy_translations',
+        severity: 'warning',
+        message: 'translations.txt uses an older non-standard format and was ignored.',
+      },
+    ]);
   });
 });

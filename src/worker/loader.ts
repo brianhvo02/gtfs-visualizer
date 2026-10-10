@@ -1,6 +1,7 @@
 import {Unzip, UnzipInflate} from 'fflate';
 import {CsvParser} from '../gtfs/csv.ts';
 import {GTFS_TABLES, tableForFile} from '../gtfs/schema.ts';
+import {isLegacyTranslationsHeader} from '../gtfs/translations.ts';
 import type {ImportProgress} from '../shared/types.ts';
 import {createGtfsIndexes} from './ddl.ts';
 import type {IssueCollector} from './issues.ts';
@@ -62,6 +63,17 @@ function createFileConsumer(
     (fields, line) => {
       if (header === null) {
         header = fields.map((field) => field.trim());
+        if (def?.table === 'translations' && isLegacyTranslationsHeader(header)) {
+          issues.add({
+            severity: 'warning',
+            file: name,
+            line: 1,
+            column: null,
+            code: 'legacy_translations',
+            message: `${name} uses an older non-standard format and was ignored.`,
+          });
+          return;
+        }
         writer =
           def === undefined
             ? createExtraFileWriter(db, name, header, onRow)

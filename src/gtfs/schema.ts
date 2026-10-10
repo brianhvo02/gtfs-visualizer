@@ -1,3 +1,5 @@
+import {checkTranslationRow} from './translations.ts';
+
 export type ColumnType = 'text' | 'int' | 'real' | 'time';
 
 export interface ColumnDef {
@@ -12,6 +14,8 @@ export interface TableDef {
   readonly requiredFile: boolean;
   readonly columns: readonly ColumnDef[];
   readonly indexes: readonly (readonly string[])[];
+  /** Returns an error message to skip the row, or null to keep it. */
+  readonly checkRow?: (get: (column: string) => string) => string | null;
 }
 
 const text = (name: string, required = false): ColumnDef => ({name, type: 'text', required});
@@ -189,6 +193,25 @@ export const GTFS_TABLES: readonly TableDef[] = [
       text('feed_contact_url'),
     ],
     indexes: [],
+  },
+  {
+    table: 'translations',
+    file: 'translations.txt',
+    requiredFile: false,
+    columns: [
+      text('table_name', true),
+      text('field_name', true),
+      text('language', true),
+      text('translation', true),
+      text('record_id'),
+      text('record_sub_id'),
+      text('field_value'),
+    ],
+    indexes: [
+      ['table_name', 'field_name', 'language', 'record_id', 'record_sub_id'],
+      ['table_name', 'field_name', 'language', 'field_value'],
+    ],
+    checkRow: checkTranslationRow,
   },
 ];
 

@@ -14,6 +14,7 @@ export type IssueCode =
   | 'csv_syntax'
   | 'zip_error'
   | 'invalid_timezone'
+  | 'legacy_translations'
   | 'suppressed';
 
 export interface ImportIssue {

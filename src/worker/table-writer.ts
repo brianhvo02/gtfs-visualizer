@@ -116,6 +116,23 @@ export function createTableWriter(
           message: `Expected ${header.length} fields but found ${fields.length}.`,
         });
       }
+      if (def.checkRow !== undefined) {
+        const message = def.checkRow((column) => {
+          const index = positions.get(column);
+          return index === undefined ? '' : (fields[index] ?? '').trim();
+        });
+        if (message !== null) {
+          issues.add({
+            severity: 'error',
+            file: def.file,
+            line,
+            column: null,
+            code: 'invalid_value',
+            message,
+          });
+          return;
+        }
+      }
       const values: SqlValue[] = [];
       for (const {def: column, index} of bound) {
         const raw = (fields[index] ?? '').trim();

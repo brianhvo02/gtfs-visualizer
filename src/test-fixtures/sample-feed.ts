@@ -91,3 +91,26 @@ export function withoutFile(name: string): Record<string, string> {
 export function withFile(name: string, text: string): Record<string, string> {
   return {...SAMPLE_FEED, [name]: text};
 }
+
+export const SAMPLE_TRANSLATIONS = lines(
+  'table_name,field_name,language,translation,record_id,record_sub_id,field_value',
+  'stops,stop_name,fr,Gare Centrale,STN,,', // 2
+  'stops,stop_name,fr,Aéroport de Beatty,BEATTY,,', // 3
+  'stops,stop_name,fr,Avenue Nord / Avenue D,,,North Ave / D Ave N', // 4: by value
+  'stops,stop_name,fr,Quai A,STN_A,,', // 5: id beats value (line 6)
+  'stops,stop_name,fr,Quai (par valeur),,,Central Station Platform A', // 6
+  'stops,stop_name,fr,Quai A bis,STN_A,,', // 7: duplicate of 5, loses
+  'routes,route_long_name,fr,Aéroport - Centre,R10,,', // 8
+  'trips,trip_headsign,fr,Centre,,,Central', // 9
+  'agency,agency_name,fr,Régie de transport démo,DTA,,', // 10
+  'feed_info,feed_publisher_name,fr,Éditeur démo,,,', // 11
+  'stops,stop_name,fr,Sans clé,,,', // 12: invalid, neither key
+  'stops,stop_name,fr,Deux clés,FUR,,Furnace Creek', // 13: invalid, both keys
+  'stops,stop_name,fr,,FUR,,', // 14: empty translation
+  'stops,stop_name,DE,Zentralbahnhof,STN,,', // 15
+);
+export const LEGACY_TRANSLATIONS = lines('trans_id,lang,translation', 'Central Station,fr,Gare Centrale');
+export const TRANSLATED_FEED: Readonly<Record<string, string>> = withFile(
+  'translations.txt',
+  SAMPLE_TRANSLATIONS,
+);
