@@ -1,6 +1,12 @@
 [
   {"mdbId": "mdb-437"},
   {
+    "mdbId": "mdb-516",
+    "name": "NYC Subway (MTA New York City Transit)",
+    "place": "New York City, New York, US",
+    "license": "https://www.mta.info/developers/terms-and-conditions"
+  },
+  {
     "id": "bay-area-511",
     "name": "511 SF Bay Area (MTC regional)",
     "place": "San Francisco Bay Area, California, US",
