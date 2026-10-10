@@ -80,3 +80,5 @@ input[type='search'], input[type='url'], select { width: 100%; padding: 6px 8px;
   .app { grid-template-columns: 1fr; grid-template-rows: 50vh 50vh; }
   .sidebar { order: 2; border-right: none; border-top: 1px solid var(--border); }
 }
+
+.language-select { width: auto; max-width: 10rem; }

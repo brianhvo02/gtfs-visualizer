@@ -124,7 +124,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
       </aside>
       <MapView
         service={service}
-        language={resolved ?? NO_LANGUAGE}
+        language={activeFeed === null ? NO_LANGUAGE : resolved}
         feedId={activeFeed?.id ?? null}
         selectedRouteId={selection.route}
         selectedStopId={selection.stop}
@@ -157,11 +157,13 @@ function FeedContent({
   onSelectStop,
   onPatternStops,
 }: FeedContentProps): ReactElement {
+  // The gate (time zone) is language-independent, so changing language never unmounts the detail views.
+  const base = useAsync(() => service.getFeedSummary(feed.id, null), [service, feed.id]);
   const summary = useAsync(() => service.getFeedSummary(feed.id, lang), [service, feed.id, lang]);
   const routes = useAsync(() => service.getRoutes(feed.id, lang), [service, feed.id, lang]);
 
-  if (summary.status === 'loading') return <p className="muted">Loading feed…</p>;
-  if (summary.status === 'error') return <ErrorMessage error={summary.error} />;
+  if (base.status === 'loading') return <p className="muted">Loading feed…</p>;
+  if (base.status === 'error') return <ErrorMessage error={base.error} />;
 
   if (selection.stop !== null) {
     return (
@@ -171,7 +173,7 @@ function FeedContent({
         lang={lang}
         stopId={selection.stop}
         date={selection.date}
-        timezone={summary.value.timezone}
+        timezone={base.value.timezone}
         onBack={() => update({stop: null, date: null})}
         onSelectRoute={onSelectRoute}
         onDateChange={(date) => update({date}, {replace: true})}
@@ -197,7 +199,9 @@ function FeedContent({
       {routes.status === 'loading' && <p className="muted">Loading routes…</p>}
       {routes.status === 'error' && <ErrorMessage error={routes.error} />}
       {routes.status === 'ok' && <RouteList routes={routes.value} onSelect={onSelectRoute} />}
-      <FeedInfo feed={feed} summary={summary.value} />
+      {summary.status === 'loading' && <p className="muted">Loading feed details…</p>}
+      {summary.status === 'error' && <ErrorMessage error={summary.error} />}
+      {summary.status === 'ok' && <FeedInfo feed={feed} summary={summary.value} />}
     </>
   );
 }

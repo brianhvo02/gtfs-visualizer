@@ -18,7 +18,8 @@ import {
 export interface MapViewProps {
   readonly service: FeedApi;
   readonly feedId: string | null;
-  readonly language: ResolvedLanguage;
+  /** Null while a feed's languages are still loading; the map keeps its current language. */
+  readonly language: ResolvedLanguage | null;
   readonly selectedRouteId: string | null;
   readonly selectedStopId: string | null;
   readonly routeStopIds: readonly string[];
@@ -61,7 +62,9 @@ export function MapView({
   useEffect(() => {
     labelsRef.current = labels;
   }, [labels]);
-  const {display, query} = language;
+  const pending = language === null;
+  const display = language?.display ?? null;
+  const query = language?.query ?? null;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -148,10 +151,11 @@ export function MapView({
   }, [adapter, service, feedId]);
 
   useEffect(() => {
-    adapter?.setLanguage(display);
-  }, [adapter, display]);
+    if (!pending) adapter?.setLanguage(display);
+  }, [adapter, display, pending]);
 
   useEffect(() => {
+    if (pending) return;
     if (feedId === null || query === null) {
       // Clear stale labels when the feed or language no longer has translations.
       // oxlint-disable-next-line react/set-state-in-effect
@@ -170,7 +174,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [service, feedId, query]);
+  }, [service, feedId, query, pending]);
 
   useEffect(() => {
     if (adapter === null) return;

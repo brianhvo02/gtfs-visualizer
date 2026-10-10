@@ -133,6 +133,21 @@ describe('getFeedLanguages', () => {
     const files = {...TRANSLATED_FEED, 'translations.txt': 'table_name,field_name,language,translation,record_id\nstops,stop_name,EN,X,STN\n'};
     expect(getFeedLanguages((await loadSampleDb(files)).db).languages).toEqual(['en']);
   });
+  it('unifies mixed-case spellings so exact-match lookups translate every record', async () => {
+    const rows = [
+      'table_name,field_name,language,translation,record_id',
+      'stops,stop_name,FR,Gare,STN',
+      'stops,stop_name,fr,Beatty fr,BEATTY',
+    ];
+    const files = {...TRANSLATED_FEED, 'translations.txt': rows.join('\n') + '\n'};
+    const {db} = await loadSampleDb(files);
+    const {languages} = getFeedLanguages(db);
+    expect(languages).toHaveLength(2);
+    const spelling = languages[1] ?? '';
+    expect(spelling.toLowerCase()).toBe('fr');
+    expect(getStopDetail(db, 'STN', spelling)?.stop.name).toBe('Gare');
+    expect(getStopDetail(db, 'BEATTY', spelling)?.stop.name).toBe('Beatty fr');
+  });
   it('reports no languages for a feed imported before translations existed', async () => {
     const {db} = await loadSampleDb();
     db.exec("DELETE FROM feed_summary WHERE key IN ('languages', 'original_language'); DROP TABLE translations;");

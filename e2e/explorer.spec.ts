@@ -90,14 +90,31 @@ test('shows a feed in a chosen language and keeps it on reload', async ({page}) 
   const language = page.getByRole('combobox', {name: 'Language'});
   await expect(language).toHaveValue('original');
   await expect.poll(async () => (await fakeMapState(page)).language).toBe('en');
+  const fitsBefore = (await fakeMapState(page)).fitBoundsCount;
   await language.selectOption('fr');
   await expect(page).toHaveURL(/lang=fr/);
   await expect.poll(async () => (await fakeMapState(page)).language).toBe('fr');
   const sidebar = page.locator('aside');
   await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();
+  expect((await fakeMapState(page)).fitBoundsCount).toBe(fitsBefore);
   await page.reload();
   await expect(page.getByRole('combobox', {name: 'Language'})).toHaveValue('fr');
   await expect(sidebar.getByRole('button', {name: '10 · Aéroport - Centre'})).toBeVisible();
+});
+
+test('keeps the route detail view mounted when the language changes', async ({page}) => {
+  await page.goto('/');
+  await uploadTranslatedSample(page);
+  const sidebar = page.locator('aside');
+  await sidebar.getByRole('button', {name: /^10 ·/}).click();
+  const pattern = sidebar.getByRole('combobox', {name: 'Pattern'});
+  const options = await pattern.locator('option').evaluateAll((nodes) => nodes.map((n) => (n as HTMLOptionElement).value));
+  expect(options.length).toBeGreaterThan(1);
+  await pattern.selectOption(options[1] ?? '');
+  await page.getByRole('combobox', {name: 'Language'}).selectOption('fr');
+  await expect(sidebar.getByRole('heading', {name: /Aéroport - Centre/})).toBeVisible();
+  await expect(pattern).toHaveValue(options[1] ?? '');
+  await expect(sidebar.getByRole('button', {name: '← All routes'})).toBeVisible();
 });
 
 test('has no language selector for a feed without translations', async ({page}) => {

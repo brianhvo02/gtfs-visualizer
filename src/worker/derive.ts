@@ -220,6 +220,14 @@ function buildSummary(db: Database, issues: IssueCollector): void {
     seen.add(language.toLowerCase());
     others.push(language);
   }
+  // The worker matches translations.language exactly (to keep the indexes usable), so
+  // rewrite every spelling of a language to the single one reported in `languages`.
+  for (const kept of original === null ? others : [original, ...others]) {
+    db.exec({
+      sql: 'UPDATE translations SET language = ? WHERE lower(language) = lower(?) AND language != ?',
+      bind: [kept, kept, kept],
+    });
+  }
   insert.bind(['languages', JSON.stringify(original === null ? others : [original, ...others])]).stepReset();
   if (original !== null) insert.bind(['original_language', original]).stepReset();
   insert.finalize();
