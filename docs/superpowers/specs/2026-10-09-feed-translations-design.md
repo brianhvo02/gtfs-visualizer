@@ -14,11 +14,11 @@ Many feeds publish names in more than one language (e.g. bilingual stop names). 
 |---|---|---|
 | What is translated | Feed text from `translations.txt` **and** Mapbox base-map labels, from one selector | One control, consistent result |
 | Where the choice lives | URL query parameter `?lang=` | URL is already the source of truth for selection; links are shareable |
-| Translated fields | `stops.stop_name`, `routes.route_short_name`, `routes.route_long_name`, `trips.trip_headsign`, `stop_times.stop_headsign`, `agency.agency_name`, `feed_info.feed_publisher_name` | Exactly the text the UI shows today |
-| Where translation happens | At query time in the worker (Approach 1) | Keeps "worker owns all data"; avoids materializing per-`stop_times` rows at import |
+| Translated fields | `stops.stop_name`, `routes.route_short_name`, `routes.route_long_name`, `trips.trip_headsign` (departures and pattern headsigns), `agency.agency_name`, `feed_info.feed_publisher_name` | Exactly the text the UI shows today |
+| Where translation happens | At query time in the worker (Approach 1) | Keeps "worker owns all data"; avoids materializing translations at import |
 | Legacy (pre-spec) `translations.txt` | Skipped with a warning | Non-standard; rare |
 
-Rejected: resolving translations at import into a flat table (value-based `stop_headsign` translations would expand to one row per matching `stop_times` row — potentially millions — inflating import time and storage); translating in the UI (spreads lookup logic across views, breaks the worker boundary).
+Rejected: resolving translations at import into a flat table (value-based translations would have to be expanded per matching record, and any change to matching logic would require re-import); translating in the UI (spreads lookup logic across views, breaks the worker boundary).
 
 ## 3. Data & import
 
@@ -49,7 +49,6 @@ The file is optional (`requiredFile: false`). Indexes, created after load like o
 | `stops` | `stop_id` | — |
 | `routes` | `route_id` | — |
 | `trips` | `trip_id` | — |
-| `stop_times` | `trip_id` | `stop_sequence` |
 | `feed_info` | not used — a translation applies to the single row | — |
 
 ### Validation (via `IssueCollector`, existing per-file caps)
@@ -69,16 +68,16 @@ The file is optional (`requiredFile: false`). Indexes, created after load like o
 
 `src/worker/translate.ts` builds the SQL expression for one translatable field given the table, the field, the row alias, and whether a language is bound. The expression is:
 
-1. the translation matched by `record_id` (plus `record_sub_id = stop_sequence` for `stop_times`; table/field/language only for `feed_info`), else
+1. the translation matched by `record_id` (table/field/language only for `feed_info`), else
 2. the translation matched by `field_value = <original value>`, else
 3. the original column.
 
-`lang` is passed as a bound parameter. When `lang` is `null` the helper returns the bare column, so untranslated queries are identical to today's. All name-returning queries in `queries.ts` use the helper, including the shared `ROUTE_COLUMNS`, so `routeLabel` and everything built on it follows.
+`lang` is passed as a bound parameter. When `lang` is `null` the helper returns the bare column, so untranslated queries are identical to today's. All name-returning queries in `queries.ts` use the helper, including the shared `ROUTE_COLUMNS`, so `routeLabel` and everything built on it follows. Pattern headsigns are translated by joining `trips` on `route_patterns.rep_trip_id` (the trip they were copied from). Duplicate translations for the same key resolve to the first row in the file.
 
 ### API (`FeedService`, seen by the UI as `FeedApi`)
 
 - `getRoutes`, `getRouteDetail`, `getStopDetail`, `getStopDepartures`, `getFeedSummary` take a trailing `lang: string | null`.
-- `FeedSummary` gains `languages: readonly string[]` and `originalLanguage: string | null` (`null` when `feed_lang` is missing or `mul`).
+- New `getFeedLanguages(feedId: string): FeedLanguages` where `FeedLanguages = {languages: readonly string[]; originalLanguage: string | null}` (`originalLanguage` is `null` when `feed_lang` is missing or `mul`). It reads only `feed_summary`, so it is not itself translated (the summary is) and works on feeds imported before this feature (no `languages` key → empty list → no selector, and no translation SQL ever runs against a DB without a `translations` table).
 - New `getMapLabels(feedId: string, lang: string | null): MapLabels` where `MapLabels = {routes: Record<string, string>; stops: Record<string, string>}`, keyed by route id (value = route label) and stop id.
 - `getRouteShapesGeoJSON` / `getStopsGeoJSON` are unchanged and keep original names (the fake map's buttons and existing E2E tests rely on them; re-sending shape geometry on a language change would be wasteful).
 
@@ -96,19 +95,19 @@ Two indexed lookups per translated field per row, only when a language is select
 
 ### Effective language
 
-Pure function `resolveLanguage(requested, browserLanguages, summary)` in `src/state/resolve-language.ts`. Language codes compare case-insensitively.
+Pure function `resolveLanguage(requested, browserLanguages, feedLanguages)` in `src/state/resolve-language.ts`. Language codes compare case-insensitively.
 
-1. `requested` (`?lang=`) if it is in `summary.languages`.
+1. `requested` (`?lang=`) if it is the reserved value `original` (always the original text), or if it is in `feedLanguages.languages`.
 2. Else the first of `browserLanguages` (`navigator.languages`) that matches: exact match first, then primary-subtag match in either direction (`fr-CA` ↔ `fr`).
 3. Else `null` (original text).
 
-If the result equals `summary.originalLanguage` the effective language passed to the worker is `null`. An unavailable `?lang=` is left in the URL untouched, so it applies again after switching to a feed that has it.
+The result uses the feed's spelling of the code. If it equals `feedLanguages.originalLanguage` the language passed to the worker is `null`. An unavailable `?lang=` is left in the URL untouched, so it applies again after switching to a feed that has it.
 
 ### Selector
 
 - `<select aria-label="Language">` in the sidebar header.
 - Shown only when a feed is open and it has at least one translation language besides the original.
-- Option labels: the language's own name via `new Intl.DisplayNames([code], {type: 'language'})`, wrapped in try/catch with the raw code as fallback. The original language is suffixed "(original)"; for a `mul` / missing `feed_lang` the original option reads "Feed default".
+- Option labels: the language's own name via `new Intl.DisplayNames([code], {type: 'language'})`, wrapped in try/catch with the raw code as fallback. The original-text option has the value `original` (written to the URL as `lang=original`, so it sticks even when the browser's language has a translation) and reads "<name> (original)", or "Feed default" for a `mul` / missing `feed_lang`.
 
 ### Data flow
 
@@ -128,9 +127,9 @@ No new user-facing errors. Import problems are import issues (§3). An unknown `
 
 ## 7. Testing
 
-- `src/test-fixtures/sample-feed.ts` (still `fflate`-only): add a French `translations.txt` with a `record_id` stop name, a `field_value` headsign, a `stop_times` translation using `record_sub_id`, a `feed_info` translation, and one invalid row; plus a legacy-format variant.
+- `src/test-fixtures/sample-feed.ts` (still `fflate`-only): add a French `translations.txt` with a `record_id` stop name, a `field_value` headsign, a `feed_info` translation, a stop with both a `record_id` and a `field_value` translation, and invalid rows; plus a legacy-format variant.
 - `loader_test.ts`: rows imported; invalid row reported and skipped; legacy file reported as `legacy_translations` and skipped.
-- `derive_test.ts`: `languages` contents, including `mul` and missing `feed_lang`.
+- `derive_test.ts` / `queries_test.ts`: `getFeedLanguages` contents, including `mul`, missing `feed_lang`, and a DB without a `languages` key.
 - `queries_test.ts`: each translated field; `record_id` precedence over `field_value`; `null` lang returns originals; parent-station departures translated; `getMapLabels`.
 - `url-state_test.ts`: `lang` parse/serialize; preserved on feed switch.
 - `resolve-language_test.ts`: precedence; primary-subtag matching both ways; case-insensitivity.
