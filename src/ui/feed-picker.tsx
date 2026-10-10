@@ -13,7 +13,7 @@ export interface FeedPickerProps {
 }
 
 function catalogSource(entry: CatalogEntry): ImportSource {
-  return {kind: 'catalog', id: entry.id, name: entry.name, url: entry.url, sha256: null};
+  return {kind: 'catalog', entry, key: null};
 }
 
 function ImportFailureView({failure}: {readonly failure: ImportFailure}): ReactElement {

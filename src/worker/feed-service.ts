@@ -18,6 +18,7 @@ import type {
   StopProps,
   StorageCheck,
 } from '../shared/types.ts';
+import {buildFeedRequest} from '../catalog/feed-request.ts';
 import {STORAGE_HEADROOM} from '../shared/storage.ts';
 import {createGtfsTables} from './ddl.ts';
 import {buildDerivedTables} from './derive.ts';
@@ -32,6 +33,7 @@ const FEED_PREFIX = '/feeds/';
 const CORS_MESSAGE =
   "Couldn't download the feed. The server may not allow downloads from other websites (CORS). " +
   'Download the zip yourself and upload it instead.';
+const BLOCKED_MESSAGE = "Your browser couldn't download this feed directly.";
 
 export interface FeedServiceDeps {
   readonly fetch: (url: string, init?: RequestInit) => Promise<Response>;
@@ -48,7 +50,10 @@ interface Acquired {
   readonly sourceRef: string;
   readonly fixedName: string | null;
   readonly fallbackName: string;
-  readonly catalogSha256: string | null;
+  readonly sourceEtag: string | null;
+  readonly sourceLastModified: string | null;
+  readonly license: string | null;
+  readonly viaMobilityDatabase: boolean;
 }
 
 export function slugify(value: string): string {
@@ -66,14 +71,21 @@ function failure(code: ImportErrorCode, message: string): ImportFailure {
 }
 
 function toFailure(error: unknown, source: ImportSource): ImportFailure {
-  if (error instanceof TypeError && source.kind !== 'file') {
+  if (error instanceof TypeError && source.kind === 'catalog') {
+    return failure('blocked', BLOCKED_MESSAGE);
+  }
+  if (error instanceof TypeError && source.kind === 'url') {
     // fetch() rejects its body stream with a TypeError when the connection drops mid-download.
     return failure('network', CORS_MESSAGE);
   }
   if (error instanceof NotZipError) {
     return failure('not_zip', "This file isn't a zip archive. GTFS feeds are distributed as .zip files.");
   }
-  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  let message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  if (source.kind === 'catalog' && source.key !== null && source.key.length > 0) {
+    // Never let the user's key reach a message, even through an unexpected error.
+    for (const secret of [source.key, encodeURIComponent(source.key)]) message = message.split(secret).join('***');
+  }
   if (/QuotaExceeded|SQLITE_FULL|disk is full|quota/i.test(message)) {
     return failure('quota', 'Ran out of browser storage while importing. Delete other feeds and try again.');
   }
@@ -91,7 +103,10 @@ function toRecord(row: Record<string, unknown>): FeedRecord {
     name: text('name') ?? '',
     sourceKind: kind === 'catalog' || kind === 'url' ? kind : 'file',
     sourceRef: text('source_ref') ?? '',
-    catalogSha256: text('catalog_sha256'),
+    sourceEtag: text('source_etag'),
+    sourceLastModified: text('source_last_modified'),
+    license: text('license'),
+    viaMobilityDatabase: row['via_mdb'] === 1,
     importedAt: text('imported_at') ?? '',
     serviceStart: text('service_start'),
     serviceEnd: text('service_end'),
@@ -125,6 +140,16 @@ export class FeedService {
         db_filename TEXT NOT NULL
       )
     `);
+    const existing = new Set(meta.selectObjects('PRAGMA table_info(feeds)').map((column) => column['name']));
+    const added: ReadonlyArray<readonly [string, string]> = [
+      ['source_etag', 'TEXT'],
+      ['source_last_modified', 'TEXT'],
+      ['license', 'TEXT'],
+      ['via_mdb', 'INTEGER NOT NULL DEFAULT 0'],
+    ];
+    for (const [name, type] of added) {
+      if (!existing.has(name)) meta.exec(`ALTER TABLE feeds ADD COLUMN ${name} ${type}`);
+    }
     this.meta = meta;
     const referenced = new Set(this.listFeeds().map((feed) => feed.dbFilename));
     for (const name of this.store.list()) {
@@ -196,7 +221,10 @@ export class FeedService {
         name: acquired.fixedName ?? this.nameFromSummary(summary) ?? acquired.fallbackName,
         sourceKind: acquired.sourceKind,
         sourceRef: acquired.sourceRef,
-        catalogSha256: acquired.catalogSha256,
+        sourceEtag: acquired.sourceEtag,
+        sourceLastModified: acquired.sourceLastModified,
+        license: acquired.license,
+        viaMobilityDatabase: acquired.viaMobilityDatabase,
         importedAt: this.deps.now().toISOString(),
         serviceStart: summary.serviceStart,
         serviceEnd: summary.serviceEnd,
@@ -247,6 +275,7 @@ export class FeedService {
   }
 
   private async acquire(source: ImportSource): Promise<Acquired | ImportFailure> {
+    const none = {sourceEtag: null, sourceLastModified: null, license: null, viaMobilityDatabase: false} as const;
     if (source.kind === 'file') {
       const base = source.file.name.replace(/\.zip$/i, '');
       return {
@@ -258,19 +287,43 @@ export class FeedService {
         sourceRef: source.file.name,
         fixedName: null,
         fallbackName: base,
-        catalogSha256: null,
+        ...none,
+      };
+    }
+    if (source.kind === 'catalog-file') {
+      return {
+        ok: true,
+        stream: source.file.stream(),
+        bytesTotal: source.file.size,
+        id: source.entry.id,
+        sourceKind: 'catalog',
+        sourceRef: source.entry.id,
+        fixedName: source.entry.name,
+        fallbackName: source.entry.name,
+        ...none,
+        license: source.entry.license,
+        viaMobilityDatabase: source.entry.viaMobilityDatabase,
       };
     }
     let response: Response;
     try {
-      response =
-        source.kind === 'catalog'
-          ? await this.deps.fetch(source.url, {cache: 'no-cache'})
-          : await this.deps.fetch(source.url);
+      if (source.kind === 'catalog') {
+        const request = buildFeedRequest(source.entry, source.key);
+        response = await this.deps.fetch(request.url, {cache: 'no-cache', headers: request.headers});
+      } else {
+        response = await this.deps.fetch(source.url);
+      }
     } catch {
-      return failure('network', CORS_MESSAGE);
+      return source.kind === 'catalog' ? failure('blocked', BLOCKED_MESSAGE) : failure('network', CORS_MESSAGE);
     }
     if (!response.ok || response.body === null) {
+      if (
+        source.kind === 'catalog' &&
+        source.entry.access.kind === 'key' &&
+        (response.status === 401 || response.status === 403)
+      ) {
+        return failure('key_rejected', 'The provider rejected this key.');
+      }
       return failure('http', `The server responded with HTTP ${response.status}.`);
     }
     const length = Number(response.headers.get('content-length'));
@@ -280,12 +333,15 @@ export class FeedService {
         ok: true,
         stream: response.body,
         bytesTotal,
-        id: source.id,
+        id: source.entry.id,
         sourceKind: 'catalog',
-        sourceRef: source.id,
-        fixedName: source.name,
-        fallbackName: source.name,
-        catalogSha256: source.sha256,
+        sourceRef: source.entry.id,
+        fixedName: source.entry.name,
+        fallbackName: source.entry.name,
+        sourceEtag: response.headers.get('etag'),
+        sourceLastModified: response.headers.get('last-modified'),
+        license: source.entry.license,
+        viaMobilityDatabase: source.entry.viaMobilityDatabase,
       };
     }
     const url = new URL(source.url);
@@ -298,7 +354,10 @@ export class FeedService {
       sourceRef: source.url,
       fixedName: null,
       fallbackName: url.hostname,
-      catalogSha256: null,
+      sourceEtag: response.headers.get('etag'),
+      sourceLastModified: response.headers.get('last-modified'),
+      license: null,
+      viaMobilityDatabase: false,
     };
   }
 
@@ -322,18 +381,22 @@ export class FeedService {
     const previous = this.getRecord(record.id);
     this.requireMeta().exec({
       sql: `INSERT OR REPLACE INTO feeds
-        (id, name, source_kind, source_ref, catalog_sha256, imported_at, service_start, service_end, db_filename)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, name, source_kind, source_ref, imported_at, service_start, service_end, db_filename,
+          source_etag, source_last_modified, license, via_mdb)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       bind: [
         record.id,
         record.name,
         record.sourceKind,
         record.sourceRef,
-        record.catalogSha256,
         record.importedAt,
         record.serviceStart,
         record.serviceEnd,
         record.dbFilename,
+        record.sourceEtag,
+        record.sourceLastModified,
+        record.license,
+        record.viaMobilityDatabase ? 1 : 0,
       ],
     });
     if (previous !== null && previous.dbFilename !== record.dbFilename) {

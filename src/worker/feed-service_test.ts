@@ -1,5 +1,6 @@
 import {strToU8} from 'fflate';
 import {beforeEach, describe, expect, it} from 'vitest';
+import type {CatalogEntry} from '../catalog/catalog-types.ts';
 import type {ImportProgress, ImportResult} from '../shared/types.ts';
 import {makeZip, SAMPLE_FEED, withoutFile} from '../test-fixtures/sample-feed.ts';
 import {FeedService, META_FILENAME, slugify} from './feed-service.ts';
@@ -7,6 +8,28 @@ import {MemoryFeedStore} from './feed-store.ts';
 import {loadSqlite} from './sqlite.ts';
 
 const NOW = new Date('2026-10-09T12:00:00Z');
+const KEY = 'SECRETKEY123';
+
+function catalogEntry(overrides: Partial<CatalogEntry> = {}): CatalogEntry {
+  return {
+    id: 'Demo_Feed',
+    name: 'Demo (catalog)',
+    place: 'Demoville',
+    url: 'https://api.test/demo.zip',
+    originalUrl: null,
+    access: {kind: 'direct'},
+    license: 'CC-BY-4.0',
+    bbox: null,
+    featured: false,
+    viaMobilityDatabase: true,
+    ...overrides,
+  };
+}
+
+const keyedEntry = (queryParam: string | null = 'consumerKey', header: string | null = null): CatalogEntry =>
+  catalogEntry({
+    access: {kind: 'key', provider: 'P', signupUrl: 'https://p.test', queryParam, header},
+  });
 
 /** Copies into an ArrayBuffer-backed array so the bytes satisfy DOM BlobPart/BodyInit types. */
 function zipBytes(files = SAMPLE_FEED): Uint8Array<ArrayBuffer> {
@@ -22,16 +45,19 @@ describe('FeedService', () => {
   let service: FeedService;
   let fetchImpl: (url: string) => Promise<Response>;
   let fetchInits: Array<RequestInit | undefined>;
+  let fetchUrls: string[];
   let clock: number;
 
   beforeEach(async () => {
     store = new MemoryFeedStore(await loadSqlite());
     fetchImpl = async () => new Response(zipBytes());
     fetchInits = [];
+    fetchUrls = [];
     clock = NOW.getTime();
     service = new FeedService(store, {
       fetch: (url, init) => {
         fetchInits.push(init);
+        fetchUrls.push(url);
         return fetchImpl(url);
       },
       now: () => new Date(clock++),
@@ -63,13 +89,115 @@ describe('FeedService', () => {
     expect(service.getRoutes('file-demo-transit', null).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
   });
 
-  it('imports from a catalog entry using the catalog name and checksum', async () => {
-    const result = await service.importFeed(
-      {kind: 'catalog', id: 'demo', name: 'Demo (catalog)', url: 'https://r2.test/feeds/demo.zip', sha256: 'abc'},
-      () => {},
-    );
+  it('imports a catalog entry with its name, license, and source validators', async () => {
+    fetchImpl = async () =>
+      new Response(zipBytes(), {
+        headers: {etag: '"abc"', 'last-modified': 'Mon, 05 Oct 2026 18:31:43 GMT'},
+      });
+    const entry = catalogEntry();
+    const result = await service.importFeed({kind: 'catalog', entry, key: null}, () => {});
     if (!result.ok) throw new Error(result.message);
-    expect(result.feed).toMatchObject({id: 'demo', name: 'Demo (catalog)', sourceKind: 'catalog', catalogSha256: 'abc'});
+    expect(result.feed).toMatchObject({
+      id: 'Demo_Feed',
+      name: entry.name,
+      sourceKind: 'catalog',
+      sourceRef: 'Demo_Feed',
+      viaMobilityDatabase: true,
+      license: 'CC-BY-4.0',
+      sourceEtag: '"abc"',
+      sourceLastModified: 'Mon, 05 Oct 2026 18:31:43 GMT',
+    });
+    expect(fetchInits[0]).toMatchObject({cache: 'no-cache'});
+    expect(service.listFeeds()).toEqual([result.feed]);
+  });
+
+  it('calls a keyed URL with the key and never saves it', async () => {
+    const result = await service.importFeed({kind: 'catalog', entry: keyedEntry(), key: KEY}, () => {});
+    if (!result.ok) throw new Error(result.message);
+    expect(fetchUrls[0]).toBe(`https://api.test/demo.zip?consumerKey=${KEY}`);
+    expect(JSON.stringify(service.listFeeds())).not.toContain(KEY);
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('sends a header key as a request header', async () => {
+    await service.importFeed({kind: 'catalog', entry: keyedEntry(null, 'X-Api-Key'), key: KEY}, () => {});
+    expect(fetchInits[0]).toMatchObject({headers: {'X-Api-Key': KEY}});
+    expect(fetchUrls[0]).toBe('https://api.test/demo.zip');
+  });
+
+  it.each([401, 403])('maps HTTP %i on a keyed entry to key_rejected without leaking the key', async (status) => {
+    fetchImpl = async () => new Response('no', {status});
+    const result = await service.importFeed({kind: 'catalog', entry: keyedEntry(), key: KEY}, () => {});
+    expect(result).toMatchObject({ok: false, code: 'key_rejected', message: 'The provider rejected this key.'});
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(`${KEY}|consumerKey`));
+  });
+
+  it('maps HTTP 404 on a keyed entry to http without leaking the key', async () => {
+    fetchImpl = async () => new Response('no', {status: 404});
+    const result = await service.importFeed({kind: 'catalog', entry: keyedEntry(), key: KEY}, () => {});
+    expect(result).toMatchObject({ok: false, code: 'http'});
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(`${KEY}|consumerKey`));
+  });
+
+  it('maps a TypeError on a catalog entry to blocked without leaking the key', async () => {
+    fetchImpl = async (url) => {
+      throw new TypeError(`Failed to fetch ${url}`);
+    };
+    const result = await service.importFeed({kind: 'catalog', entry: keyedEntry(), key: KEY}, () => {});
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'blocked',
+      message: "Your browser couldn't download this feed directly.",
+    });
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(`${KEY}|consumerKey`));
+  });
+
+  it('maps a mid-download TypeError on a catalog entry to blocked', async () => {
+    fetchImpl = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.error(new TypeError('network error'));
+          },
+        }),
+      );
+    const result = await service.importFeed({kind: 'catalog', entry: catalogEntry(), key: null}, () => {});
+    expect(result).toMatchObject({ok: false, code: 'blocked'});
+  });
+
+  it('does not leak the key when the response is not a zip', async () => {
+    fetchImpl = async () => new Response('<html>nope</html>');
+    const result = await service.importFeed({kind: 'catalog', entry: keyedEntry(), key: KEY}, () => {});
+    expect(result).toMatchObject({ok: false, code: 'not_zip'});
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(`${KEY}|consumerKey`));
+  });
+
+  it('imports a downloaded file under the catalog id and name', async () => {
+    const entry = catalogEntry({access: {kind: 'download', pageUrl: null}});
+    const result = await service.importFeed({kind: 'catalog-file', entry, file: zipFile('whatever.zip')}, () => {});
+    if (!result.ok) throw new Error(result.message);
+    expect(result.feed).toMatchObject({id: 'Demo_Feed', name: entry.name, sourceKind: 'catalog', sourceEtag: null});
+  });
+
+  it('migrates an older feeds table', async () => {
+    const old = new MemoryFeedStore(await loadSqlite());
+    const meta = old.open(META_FILENAME);
+    meta.exec(`CREATE TABLE feeds (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, source_kind TEXT NOT NULL, source_ref TEXT NOT NULL,
+      catalog_sha256 TEXT, imported_at TEXT NOT NULL, service_start TEXT, service_end TEXT, db_filename TEXT NOT NULL)`);
+    meta.exec(`INSERT INTO feeds VALUES ('old', 'Old', 'url', 'https://x.test/a.zip', NULL, '2026-01-01T00:00:00Z', NULL, NULL, '/feeds/old-1.db')`);
+    old.close(META_FILENAME);
+    const migrated = new FeedService(old, {fetch: fetchImpl, now: () => NOW, estimate: async () => ({})});
+    migrated.init();
+    expect(migrated.listFeeds()).toEqual([
+      expect.objectContaining({
+        id: 'old',
+        sourceEtag: null,
+        sourceLastModified: null,
+        license: null,
+        viaMobilityDatabase: false,
+      }),
+    ]);
   });
 
   it('derives an id from a URL', async () => {
@@ -151,7 +279,7 @@ describe('FeedService', () => {
 
   it('does not let an upload replace a catalog feed with the same slug', async () => {
     const catalog = await service.importFeed(
-      {kind: 'catalog', id: 'mbta', name: 'MBTA', url: 'https://r2.test/feeds/mbta.zip', sha256: 'abc'},
+      {kind: 'catalog', entry: catalogEntry({id: 'mbta', name: 'MBTA'}), key: null},
       () => {},
     );
     const upload = await importFile('mbta.zip');
@@ -199,14 +327,6 @@ describe('FeedService', () => {
     expect(service.listFeeds()).toEqual(feedsBefore);
     expect(store.list().sort()).toEqual(filesBefore);
     expect(service.getRoutes(first.feed.id, null).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
-  });
-
-  it('bypasses the HTTP cache for catalog downloads', async () => {
-    await service.importFeed(
-      {kind: 'catalog', id: 'demo', name: 'Demo', url: 'https://r2.test/feeds/demo.zip', sha256: 'abc'},
-      () => {},
-    );
-    expect(fetchInits[0]).toMatchObject({cache: 'no-cache'});
   });
 
   it('slugifies ids', () => {

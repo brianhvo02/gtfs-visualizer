@@ -1,3 +1,4 @@
+import type {CatalogEntry} from '../catalog/catalog-types.ts';
 import type {RouteCategory} from '../gtfs/route-types.ts';
 
 export type IssueSeverity = 'fatal' | 'error' | 'warning';
@@ -140,7 +141,10 @@ export interface FeedRecord {
   readonly name: string;
   readonly sourceKind: FeedSourceKind;
   readonly sourceRef: string;
-  readonly catalogSha256: string | null;
+  readonly sourceEtag: string | null;
+  readonly sourceLastModified: string | null;
+  readonly license: string | null;
+  readonly viaMobilityDatabase: boolean;
   readonly importedAt: string;
   readonly serviceStart: string | null;
   readonly serviceEnd: string | null;
@@ -148,17 +152,20 @@ export interface FeedRecord {
 }
 
 export type ImportSource =
-  | {
-      readonly kind: 'catalog';
-      readonly id: string;
-      readonly name: string;
-      readonly url: string;
-      readonly sha256: string | null;
-    }
+  | {readonly kind: 'catalog'; readonly entry: CatalogEntry; readonly key: string | null}
+  | {readonly kind: 'catalog-file'; readonly entry: CatalogEntry; readonly file: File}
   | {readonly kind: 'url'; readonly url: string}
   | {readonly kind: 'file'; readonly file: File};
 
-export type ImportErrorCode = 'network' | 'http' | 'not_zip' | 'fatal_issues' | 'quota' | 'unknown';
+export type ImportErrorCode =
+  | 'network'
+  | 'http'
+  | 'key_rejected'
+  | 'blocked'
+  | 'not_zip'
+  | 'fatal_issues'
+  | 'quota'
+  | 'unknown';
 
 export interface ImportFailure {
   readonly ok: false;
