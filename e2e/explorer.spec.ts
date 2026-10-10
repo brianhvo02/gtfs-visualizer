@@ -73,6 +73,22 @@ test('imports a feed from the catalog', async ({page, context}) => {
   await expect(page.locator('.feed-list').getByRole('button', {name: 'Demo Catalog Feed', exact: true})).toBeVisible();
 });
 
+test('credits Mobility Database as the source, with a data-quality disclaimer', async ({page, context}) => {
+  await context.unrouteAll();
+  await mockCatalog(context, [
+    {id: 'mdb-copy', name: 'Copied Transit', place: 'Testland', zip: sampleZip(), viaMobilityDatabase: true},
+  ]);
+  await page.goto('/');
+  const disclaimer = page.getByText(/Search covers feeds listed by the/);
+  await expect(disclaimer).toContainText('may contain errors or be out of date');
+  await expect(disclaimer.getByRole('link', {name: 'Mobility Database'})).toHaveAttribute('href', 'https://mobilitydatabase.org');
+
+  await page.getByRole('button', {name: 'Import Copied Transit'}).click();
+  await expect(page).toHaveURL(/feed=mdb-copy/, {timeout: 30_000});
+  await page.getByText('Feed details').click();
+  await expect(page.getByText(/Downloaded from the Mobility Database's copy of this feed/)).toBeVisible();
+});
+
 const KEYED = {
   kind: 'key',
   provider: 'odpt',

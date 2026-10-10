@@ -183,6 +183,14 @@ export function FeedPicker({service, onOpen}: FeedPickerProps): ReactElement {
             <input type="checkbox" checked={officialOnly} onChange={(event) => setOfficialOnly(event.target.checked)} />
             Official feeds only
           </label>
+          <p className="muted disclaimer">
+            Search covers feeds listed by the{' '}
+            <a href="https://mobilitydatabase.org" target="_blank" rel="noreferrer">
+              Mobility Database
+            </a>
+            , an open catalog maintained by MobilityData and its contributors. Names, places, links, and access details
+            come from it and may contain errors or be out of date.
+          </p>
           {searching && (
             <>
               <ul className="feed-list">{search.results.map(row)}</ul>

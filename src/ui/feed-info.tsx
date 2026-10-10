@@ -55,7 +55,15 @@ export function FeedInfo({feed, summary}: {readonly feed: FeedRecord; readonly s
               )}
             </>
           )}
-          {feed.viaMobilityDatabase && ' · via Mobility Database'}
+        </p>
+      )}
+      {feed.sourceKind === 'catalog' && feed.viaMobilityDatabase && (
+        <p className="muted disclaimer">
+          Downloaded from the{' '}
+          <a href="https://mobilitydatabase.org" target="_blank" rel="noreferrer">
+            Mobility Database
+          </a>
+          's copy of this feed. Open data may lag behind or differ from the agency's own release.
         </p>
       )}
       <table className="counts">

@@ -34,6 +34,8 @@ export interface MockCatalogEntry {
   /** For keyed entries: the key the mock provider accepts (as the `acl:consumerKey` query parameter). */
   readonly validKey?: string;
   readonly originalUrl?: string;
+  /** Downloaded from Mobility Database's hosted copy (defaults to false). */
+  readonly viaMobilityDatabase?: boolean;
 }
 
 export interface CatalogController {
@@ -59,7 +61,7 @@ export async function mockCatalog(
       license: null,
       bbox: null,
       featured: e.featured ?? true,
-      viaMobilityDatabase: false,
+      viaMobilityDatabase: e.viaMobilityDatabase ?? false,
       official: e.official ?? true,
     })),
   };
