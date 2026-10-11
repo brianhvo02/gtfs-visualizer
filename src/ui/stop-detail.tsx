@@ -2,6 +2,8 @@ import {useMemo, type ReactElement} from 'react';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import {routeLabel} from '../gtfs/route-types.ts';
 import {fromIsoDate, todayInTimeZone, toIsoDate} from '../gtfs/time.ts';
+import type {ValidationStatus} from '../shared/validation.ts';
+import {EntityIssues} from './entity-issues.tsx';
 import {ErrorMessage} from './error-message.tsx';
 import {formatDeparture} from './format.ts';
 import {useAsync} from './use-async.ts';
@@ -14,6 +16,7 @@ export interface StopDetailViewProps {
   /** YYYYMMDD from the URL, or null for today in the feed's time zone. */
   readonly date: string | null;
   readonly timezone: string | null;
+  readonly validation: ValidationStatus | null;
   readonly onBack: () => void;
   readonly onSelectRoute: (routeId: string) => void;
   readonly onDateChange: (date: string) => void;
@@ -26,6 +29,7 @@ export function StopDetailView({
   lang,
   date,
   timezone,
+  validation,
   onBack,
   onSelectRoute,
   onDateChange,
@@ -76,6 +80,7 @@ export function StopDetailView({
           </button>
         ))}
       </div>
+      <EntityIssues service={service} feedId={feedId} validation={validation} filter={{stopId}} />
       <label className="field">
         Service date
         <input

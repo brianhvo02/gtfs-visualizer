@@ -1,6 +1,8 @@
 import {useEffect, useState, type ReactElement} from 'react';
 import type {FeedApi} from '../db-client/feed-api.ts';
 import {routeLabel} from '../gtfs/route-types.ts';
+import type {ValidationStatus} from '../shared/validation.ts';
+import {EntityIssues} from './entity-issues.tsx';
 import {ErrorMessage} from './error-message.tsx';
 import {useAsync} from './use-async.ts';
 
@@ -9,6 +11,7 @@ export interface RouteDetailViewProps {
   readonly feedId: string;
   readonly routeId: string;
   readonly lang: string | null;
+  readonly validation: ValidationStatus | null;
   readonly onBack: () => void;
   readonly onSelectStop: (stopId: string) => void;
   /**
@@ -23,6 +26,7 @@ export function RouteDetailView({
   feedId,
   routeId,
   lang,
+  validation,
   onBack,
   onSelectStop,
   onPatternStops,
@@ -62,6 +66,7 @@ export function RouteDetailView({
         </span>{' '}
         {routeLabel(route)}
       </h2>
+      <EntityIssues service={service} feedId={feedId} validation={validation} filter={{routeId}} />
       {detail.patterns.length > 1 && (
         <label className="field">
           Pattern

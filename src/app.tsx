@@ -3,12 +3,14 @@ import type {FeedApi} from './db-client/feed-api.ts';
 import {host} from './db-client/host.ts';
 import {MapView} from './map/map-view.tsx';
 import type {FeedLanguages, FeedRecord} from './shared/types.ts';
+import type {ValidationStatus} from './shared/validation.ts';
 import {ORIGINAL_LANGUAGE, resolveLanguage, type ResolvedLanguage} from './state/resolve-language.ts';
 import {useSelection, type Selection, type UpdateSelection} from './state/url-state.ts';
 import {ErrorMessage} from './ui/error-message.tsx';
 import {FeedInfo} from './ui/feed-info.tsx';
 import {FeedPicker} from './ui/feed-picker.tsx';
 import {feedDisplayName} from './ui/format.ts';
+import {IssuesReport} from './ui/issues-report.tsx';
 import {HostNotice} from './ui/host-notice.tsx';
 import {LanguageSelect} from './ui/language-select.tsx';
 import {RouteDetailView} from './ui/route-detail.tsx';
@@ -169,6 +171,8 @@ function FeedContent({
 
   if (base.status === 'loading') return <p className="muted">Loading feed…</p>;
   if (base.status === 'error') return <ErrorMessage error={base.error} />;
+  const validationStatus: ValidationStatus | null =
+    validation.status.status === 'ok' ? validation.status.value : null;
 
   if (selection.stop !== null) {
     return (
@@ -179,6 +183,7 @@ function FeedContent({
         stopId={selection.stop}
         date={selection.date}
         timezone={base.value.timezone}
+        validation={validationStatus}
         onBack={() => update({stop: null, date: null})}
         onSelectRoute={onSelectRoute}
         onDateChange={(date) => update({date}, {replace: true})}
@@ -192,9 +197,22 @@ function FeedContent({
         feedId={feed.id}
         lang={lang}
         routeId={selection.route}
+        validation={validationStatus}
         onBack={() => update({route: null})}
         onSelectStop={onSelectStop}
         onPatternStops={onPatternStops}
+      />
+    );
+  }
+  if (selection.view === 'issues') {
+    return (
+      <IssuesReport
+        service={service}
+        feedId={feed.id}
+        validation={validationStatus}
+        onBack={() => update({view: null})}
+        onOpenRoute={(routeId) => update({route: routeId, stop: null, view: null})}
+        onOpenStop={(stopId) => update({stop: stopId, view: null})}
       />
     );
   }
