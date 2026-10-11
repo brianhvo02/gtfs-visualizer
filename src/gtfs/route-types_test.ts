@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {contrastText, normalizeColor, routeCategory, routeLabel} from './route-types.ts';
+import {contrastRatio, contrastText, normalizeColor, routeCategory, routeLabel} from './route-types.ts';
 
 describe('route types', () => {
   it('maps basic and extended route types to categories', () => {
@@ -22,6 +22,11 @@ describe('route types', () => {
   it('picks readable text colors', () => {
     expect(contrastText('#ffff00')).toBe('#000000');
     expect(contrastText('#000080')).toBe('#ffffff');
+  });
+  it('computes WCAG contrast ratios', () => {
+    expect(contrastRatio('#ffffff', '#000000')).toBeCloseTo(21, 5);
+    expect(contrastRatio('#ff0000', '#000000')).toBeCloseTo(5.25, 2);
+    expect(contrastRatio('#000000', '#ff0000')).toBeCloseTo(5.25, 2);
   });
   it('labels routes', () => {
     expect(routeLabel({routeId: 'R1', shortName: '10', longName: 'Main'})).toBe('10 · Main');

@@ -84,6 +84,22 @@ export function contrastText(background: string): string {
   return luminance > 0.6 ? '#000000' : '#ffffff';
 }
 
+function relativeLuminance(color: string): number {
+  const hex = color.replace(/^#/, '');
+  const channel = (offset: number): number => {
+    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
+
+/** WCAG 2 contrast ratio between two `#rrggbb` colors, from 1 to 21. */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 export function routeLabel(route: {
   readonly routeId: string;
   readonly shortName: string | null;
