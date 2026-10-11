@@ -325,6 +325,7 @@ test('keeps the route detail view mounted when the language changes', async ({pa
   const sidebar = page.locator('aside');
   await sidebar.getByRole('button', {name: /^10 ·/}).click();
   const pattern = sidebar.getByRole('combobox', {name: 'Pattern'});
+  await expect(pattern.locator('option')).not.toHaveCount(0);
   const options = await pattern.locator('option').evaluateAll((nodes) => nodes.map((n) => (n as HTMLOptionElement).value));
   expect(options.length).toBeGreaterThan(1);
   await pattern.selectOption(options[1] ?? '');
