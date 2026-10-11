@@ -161,7 +161,7 @@ Add `view` to `Selection`: `'issues'` or `null` (`?feed=x&view=issues`). Selecti
 
 ### 5.2 Explorer state
 
-`Explorer` calls `ensureValidation` when a feed opens; an import opens the feed it created, so this covers "after import" and "lazily on open" with one path. `useValidation` holds the status and progress. It re-runs a cancelled (interrupted) run up to twice, after which the UI shows "Check interrupted" with a "Check again" button. There is no revision counter: issue views include the validation status object in their `useAsync` deps, so they refresh when results arrive.
+`Explorer` calls `ensureValidation` when a feed opens; an import opens the feed it created, so this covers "after import" and "lazily on open" with one path. `useValidation` holds the status and progress. When the resolved status for the shown feed is cancelled (interrupted), it bumps an attempt counter in the `useAsync` deps to re-run, up to twice per feed (so a superseded feed never issues another worker call), after which the UI shows "Check interrupted" with a "Check again" button. There is no revision counter: issue views include the validation status object in their `useAsync` deps, so they refresh when results arrive.
 
 ### 5.3 Views
 
