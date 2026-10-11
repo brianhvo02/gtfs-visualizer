@@ -74,7 +74,27 @@ Measured on 2026-10-10, same machine, headless Chromium (Playwright's bundled bu
 Notes:
 - Validation peaks about 90 MB above the import's peak. In the browser the database lives in OPFS, so only SQLite's page cache and the checks' working data are in memory; the Node figure above is not representative.
 - Memory is not given back after validation (621 MB idle), consistent with the WebAssembly heap growing but never shrinking.
-- The browser import took about 6 minutes, roughly 8x the Node import on the same machine. That is the bigger cost on large feeds and is worth its own investigation (OPFS sahpool writes, journal settings, batch sizes).
+- The browser import took about 6 minutes, roughly 8x the Node import on the same machine. "Browser import" below found the cause and the fix.
 - Result: "7 errors · 498 warnings · 348 info". Low-memory devices may struggle with MBTA-sized feeds; most of the peak is already reached during import, and validation adds about 90 MB on top.
 - Validation took 33 s here, about twice the Node run, as expected with OPFS-backed reads and the UI's queries interleaving.
 - This is a single run, and peaks were sampled every 250 ms, so short spikes may be missed.
+
+## Browser import
+
+Measured on 2026-10-10, same machine and setup as "Browser memory" (headless Chromium, `vite --mode e2e`, MBTA zip, one run per variant). Temporary timing logs in the worker split the import into stages; the variants changed SQLite settings for the import connection only.
+
+| Import settings | Parse + insert | Indexes | Derive | Import total | Validation | Peak renderer RSS (import / validation) | Park Street departures after reload |
+|---|---|---|---|---|---|---|---|
+| 4 KB pages, 2 MB cache (before) | 51 s | 31 s | 261 s | 343 s | 32 s | 551 / 633 MB | 1.9 s |
+| 256 MB cache | 51 s | 12 s | 19 s | 83 s | — | — | — |
+| 64 KB pages | 35 s | 6 s | 103 s | 144 s | — | — | — |
+| **64 KB pages, 64 MB cache (now)** | 36 s | 6 s | 17 s | **60 s** | 18 s | 517 / 675 MB | 0.9 s |
+| 64 KB pages, 256 MB cache | 36 s | 3 s | 5 s | 45 s | 18 s | 722 / 874 MB | 0.9 s |
+| 16 KB pages, 256 MB cache | — | — | — | 61 s | 24 s | 716 / 876 MB | 1.4 s |
+
+Notes:
+- The cost was OPFS reads, not writes: with a 2 MB cache, derive's walk over stop_times in trip order missed the cache on almost every page. Node runs in memory and never paid it.
+- `configureForImport` (`src/worker/ddl.ts`) now sets 64 KB pages (kept by the file, so the explorer and validation benefit too) and a 64 MB cache for the import connection only. The 256 MB cache saves another 15 s but costs about 200 MB of peak memory; larger commit batches (200,000 rows) saved under 2 s and were dropped.
+- The database is the same size with 64 KB pages (351.9 MB vs 352.9 MB in Node). Feeds imported earlier keep 4 KB pages until re-imported.
+- Node, same machine, after the change: import 36.4 s (load+index 33.0 s, derive 3.4 s), validation 14.2 s, identical issue counts.
+- Parsing and inserting rows is now most of the remaining time.
