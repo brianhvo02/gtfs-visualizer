@@ -64,6 +64,11 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
     }
   }, [feed, feedId, update]);
 
+  useEffect(() => {
+    // Leaving a feed ("Change feed", Back) closes it in the worker, which also stops its validation run.
+    if (feedId === null) void service.closeFeed();
+  }, [service, feedId]);
+
   const selectRoute = useCallback((routeId: string) => update({route: routeId, stop: null}), [update]);
   const selectStop = useCallback((stopId: string) => update({stop: stopId}), [update]);
   const openFeed = useCallback(

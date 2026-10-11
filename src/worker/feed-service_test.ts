@@ -412,6 +412,14 @@ describe('FeedService', () => {
       expect(await run).toEqual({state: 'cancelled'});
       expect(await service.ensureValidation(second.feed.id, () => {})).toMatchObject({state: 'current'});
     });
+
+    it('cancels a run and closes the feed when the feed is closed', async () => {
+      const id = await importId('demo.zip');
+      const run = service.ensureValidation(id, () => {});
+      service.closeFeed();
+      expect(await run).toEqual({state: 'cancelled'});
+      expect(await service.ensureValidation(id, () => {})).toMatchObject({state: 'current'});
+    });
   });
 
   it('slugifies ids', () => {

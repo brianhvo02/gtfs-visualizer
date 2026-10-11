@@ -193,6 +193,11 @@ export class FeedService {
     return record;
   }
 
+  /** Closes the open feed, cancelling its validation run, so no work continues for a feed nobody is viewing. */
+  closeFeed(): void {
+    this.closeCurrent();
+  }
+
   deleteFeed(id: string): void {
     const record = this.getRecord(id);
     if (record === null) return;
