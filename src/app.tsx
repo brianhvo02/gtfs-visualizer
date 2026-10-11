@@ -15,6 +15,7 @@ import {RouteDetailView} from './ui/route-detail.tsx';
 import {RouteList} from './ui/route-list.tsx';
 import {StopDetailView} from './ui/stop-detail.tsx';
 import {useAsync} from './ui/use-async.ts';
+import {useValidation, type ValidationView} from './ui/use-validation.ts';
 
 
 const NO_STOPS: readonly string[] = [];
@@ -47,6 +48,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
     async () => (activeFeedId === null ? null : await service.getFeedLanguages(activeFeedId)),
     [service, activeFeedId],
   );
+  const validation = useValidation(service, activeFeedId);
   const feedLanguages: FeedLanguages | null = languages.status === 'ok' ? languages.value : null;
   const resolved: ResolvedLanguage | null =
     feedLanguages === null ? null : resolveLanguage(selection.lang, navigator.languages, feedLanguages);
@@ -87,6 +89,7 @@ function Explorer({service}: {readonly service: FeedApi}): ReactElement {
         selection={selection}
         lang={resolved.query}
         update={update}
+        validation={validation}
         onSelectRoute={selectRoute}
         onSelectStop={selectStop}
         onPatternStops={setRouteStopIds}
@@ -142,6 +145,7 @@ interface FeedContentProps {
   readonly selection: Selection;
   readonly lang: string | null;
   readonly update: UpdateSelection;
+  readonly validation: ValidationView;
   readonly onSelectRoute: (routeId: string) => void;
   readonly onSelectStop: (stopId: string) => void;
   readonly onPatternStops: (stopIds: readonly string[]) => void;
@@ -153,6 +157,7 @@ function FeedContent({
   selection,
   lang,
   update,
+  validation,
   onSelectRoute,
   onSelectStop,
   onPatternStops,
@@ -207,7 +212,14 @@ function FeedContent({
       {routes.status === 'ok' && <RouteList routes={routes.value} onSelect={onSelectRoute} />}
       {summary.status === 'loading' && <p className="muted">Loading feed details…</p>}
       {summary.status === 'error' && <ErrorMessage error={summary.error} />}
-      {summary.status === 'ok' && <FeedInfo feed={feed} summary={summary.value} />}
+      {summary.status === 'ok' && (
+        <FeedInfo
+          feed={feed}
+          summary={summary.value}
+          validation={validation}
+          onViewReport={() => update({view: 'issues'})}
+        />
+      )}
     </>
   );
 }

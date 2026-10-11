@@ -1,6 +1,8 @@
 import type {ReactElement} from 'react';
 import type {FeedRecord, FeedSummary} from '../shared/types.ts';
+import {formatCounts} from '../shared/validation.ts';
 import {formatServiceDate} from './format.ts';
+import type {ValidationView} from './use-validation.ts';
 
 const COUNTED_TABLES = ['agency', 'routes', 'stops', 'trips', 'stop_times', 'shapes'];
 
@@ -10,7 +12,44 @@ const SOURCE_LABELS: Readonly<Record<FeedRecord['sourceKind'], string>> = {
   file: 'Uploaded file',
 };
 
-export function FeedInfo({feed, summary}: {readonly feed: FeedRecord; readonly summary: FeedSummary}): ReactElement {
+function IssuesRow({
+  validation,
+  onViewReport,
+}: {
+  readonly validation: ValidationView;
+  readonly onViewReport: () => void;
+}): ReactElement {
+  const {status, progress} = validation;
+  if (status.status === 'error') return <>Couldn't check this feed.</>;
+  if (status.status === 'ok') {
+    const result = status.value;
+    if (result.state === 'failed') return <>Couldn't check this feed: {result.message}</>;
+    if (result.state === 'current') {
+      const text = formatCounts(result.counts);
+      return (
+        <>
+          {text === '' ? 'No issues found' : text}{' '}
+          <button type="button" className="link" onClick={onViewReport}>
+            View report
+          </button>
+        </>
+      );
+    }
+  }
+  return <>Checking feed…{progress !== null && ` (${progress.checkIndex + 1} of ${progress.checkCount})`}</>;
+}
+
+export function FeedInfo({
+  feed,
+  summary,
+  validation,
+  onViewReport,
+}: {
+  readonly feed: FeedRecord;
+  readonly summary: FeedSummary;
+  readonly validation: ValidationView;
+  readonly onViewReport: () => void;
+}): ReactElement {
   return (
     <details className="panel feed-info">
       <summary>Feed details</summary>
@@ -37,8 +76,10 @@ export function FeedInfo({feed, summary}: {readonly feed: FeedRecord; readonly s
         </dd>
         <dt>Imported</dt>
         <dd>{new Date(feed.importedAt).toLocaleString()}</dd>
-        <dt>Import notes</dt>
-        <dd>{summary.issueCount === 0 ? 'None' : `${summary.issueCount} recorded`}</dd>
+        <dt>Issues</dt>
+        <dd>
+          <IssuesRow validation={validation} onViewReport={onViewReport} />
+        </dd>
       </dl>
       {feed.sourceKind === 'catalog' && (
         <p className="muted data-line">
