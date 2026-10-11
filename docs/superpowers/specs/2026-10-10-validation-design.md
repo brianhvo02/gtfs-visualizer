@@ -86,10 +86,10 @@ CREATE TABLE validation_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ### 4.2 Rule interface
 
 ```ts
-interface RuleContext {
+interface CheckContext {
   readonly db: Database;
-  /** Records an issue; rows beyond the cap are counted but not stored. */
-  emit(issue: EmittedIssue): void;
+  /** Records an issue for one of the running check's ruleIds (throws otherwise); rows beyond the cap are counted but not stored. */
+  emit(ruleId: RuleId, issue: EmittedIssue): void;
   /** Yields a macrotask so queued queries run; throws ValidationCancelled if cancelled. */
   checkpoint(): Promise<void>;
   /** Today as YYYYMMDD in the feed's agency_timezone (browser time zone if invalid). */
@@ -98,7 +98,7 @@ interface RuleContext {
 
 interface ValidationCheck {
   readonly ruleIds: readonly RuleId[];
-  run(ctx: RuleContext): Promise<void>;
+  run(ctx: CheckContext): Promise<void>;
 }
 ```
 
@@ -116,9 +116,9 @@ Severity comes from `RULES[id]`, not from the emit call. The runner calls `check
 | `stop_time_unknown_trip` | SQL anti-join `stop_times.trip_id` → `trips`; one issue per distinct trip id | error | trip id in details |
 | `stop_time_unknown_stop` | SQL anti-join `stop_times.stop_id` → `stops`; one issue per (trip, stop id) | error | route, trip |
 | `stop_unknown_parent` | `parent_station` must exist and have the expected type: types 0, 2, 3 need a station (1); type 4 needs a platform (0) | error | stop |
-| `stop_times_out_of_order` | Batches of 2,000 trips via the `stop_times(trip_id, stop_sequence)` index; `LAG` over `arrival_secs`/`departure_secs`; flags a time earlier than the previous stop's, or departure before arrival; one issue per trip (first offending stop in details); checkpoint per batch | error | route, trip |
+| `stop_times_out_of_order` | Batches of 500 trips via the `stop_times(trip_id, stop_sequence)` index, compared in JS against the previous stop (no SQL window functions); flags a time earlier than the previous stop's, or departure before arrival; one issue per trip (first offending stop in details); checkpoint per batch | error | route, trip |
 | `trip_too_few_stops` | Same batches; trip with fewer than 2 stop times | error | route, trip |
-| `unrealistic_speed` | Per `route_patterns` row, using its `rep_trip_id`. Consecutive stops with equal times are merged into the next span with a time change, so minute rounding never yields infinite speed. Spans under 200 m are skipped. Threshold by route category: bus, tram, subway, trolleybus 150 km/h; rail 500; ferry 80; cable tram, aerial lift, funicular 50; other 150. One issue per (route, from stop, to stop) | warning | route, from stop; to stop and km/h in details |
+| `unrealistic_speed` | Per `route_patterns` row, using its `rep_trip_id`. Patterns are processed in chunks of 50 with a checkpoint per chunk, and the shape polyline cache is cleared when the route changes. Consecutive stops with equal times are merged into the next span with a time change, so minute rounding never yields infinite speed. Spans under 200 m are skipped. Threshold by route category: bus, tram, subway, trolleybus 150 km/h; rail 500; ferry 80; cable tram, aerial lift, funicular 50; other 150. One issue per (route, from stop, to stop) | warning | route, from stop; to stop and km/h in details |
 | `route_without_trips` | Route with no `route_patterns` rows | warning | route |
 | `stop_unused` | Location type 0 (or empty) or 1 not present in `stop_routes` | warning | stop |
 | `service_never_active` | Expand each service id with `gtfs/service.ts` over its calendar range plus exceptions; zero active dates | warning | one issue per route using the service |
@@ -161,7 +161,7 @@ Add `view` to `Selection`: `'issues'` or `null` (`?feed=x&view=issues`). Selecti
 
 ### 5.2 Explorer state
 
-`Explorer` calls `ensureValidation` when a feed opens; an import opens the feed it created, so this covers "after import" and "lazily on open" with one path. It holds `validation: {status | progress, revision}`; `revision` increments when a run finishes. Issue views include `revision` in their `useAsync` deps so they refresh when results arrive.
+`Explorer` calls `ensureValidation` when a feed opens; an import opens the feed it created, so this covers "after import" and "lazily on open" with one path. `useValidation` holds the status and progress. It re-runs a cancelled (interrupted) run up to twice, after which the UI shows "Check interrupted" with a "Check again" button. There is no revision counter: issue views include the validation status object in their `useAsync` deps, so they refresh when results arrive.
 
 ### 5.3 Views
 
