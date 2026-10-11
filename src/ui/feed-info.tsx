@@ -1,6 +1,6 @@
 import type {ReactElement} from 'react';
 import type {FeedRecord, FeedSummary} from '../shared/types.ts';
-import {formatCounts} from '../shared/validation.ts';
+import {formatCounts, formatFailedRules} from '../shared/validation.ts';
 import {formatServiceDate} from './format.ts';
 import type {ValidationView} from './use-validation.ts';
 
@@ -35,7 +35,9 @@ function IssuesRow({
       );
     }
     if (result.state === 'current') {
-      const text = formatCounts(result.counts);
+      const text = [formatCounts(result.counts), formatFailedRules(result.failedRules)]
+        .filter((part) => part !== '')
+        .join(' · ');
       return (
         <>
           {text === '' ? 'No issues found' : text}{' '}

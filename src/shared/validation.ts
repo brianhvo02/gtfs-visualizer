@@ -175,8 +175,16 @@ export interface ValidationCounts {
   readonly info: number;
 }
 
+/** Stored results that match RULESET_VERSION. */
+export interface CurrentValidation {
+  readonly state: 'current';
+  readonly counts: ValidationCounts;
+  /** Rules whose check threw; their counts are missing from `counts`. */
+  readonly failedRules: number;
+}
+
 export type ValidationStatus =
-  | {readonly state: 'current'; readonly counts: ValidationCounts}
+  | CurrentValidation
   | {readonly state: 'cancelled'}
   | {readonly state: 'failed'; readonly message: string};
 
@@ -214,4 +222,10 @@ export function formatCounts(counts: ValidationCounts): string {
     parts.push(`${counts.info} info`);
   }
   return parts.join(' · ');
+}
+
+/** "2 checks couldn't run"; "" when none failed. */
+export function formatFailedRules(failedRules: number): string {
+  if (failedRules === 0) return '';
+  return `${failedRules} ${failedRules === 1 ? 'check' : 'checks'} couldn't run`;
 }

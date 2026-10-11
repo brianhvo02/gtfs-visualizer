@@ -168,6 +168,7 @@ Add `view` to `Selection`: `'issues'` or `null` (`?feed=x&view=issues`). Selecti
 - **Feed details:** "Import notes: N recorded" becomes **Issues**, one of:
   - "Checking feed… (7 of 18)"
   - "3 errors · 12 warnings · 4 info · View report"
+  - "3 warnings · 1 check couldn't run · View report" when checks threw (`failedRules` on the `current` status; the report says which)
   - "No issues found · View report" (the report still lists import notes, if any)
   - "Couldn't check this feed: …"
 - **Report view** (`src/ui/issues-report.tsx`, shown when `view=issues`): heading "Feed issues" and a back link. Sections Errors, Warnings, Info, Import notes; within each, one `<details>` per rule with issues, showing title, count, and the rule's one-line explanation. Expanding fetches `{ruleId}` issues. Each issue shows its message and, when it has a target, a button "Open route <short or long name>" or "Open stop <name>"; route takes precedence when both are set. Capped rules show "Showing 200 of 1,532". Rules that failed show "This check couldn't run: …".

@@ -20,7 +20,7 @@ describe('runValidation', () => {
       },
     };
     const status = await runValidation(db, options([check]));
-    expect(status).toEqual({state: 'current', counts: {error: 0, warning: 250, info: 0}});
+    expect(status).toEqual({state: 'current', counts: {error: 0, warning: 250, info: 0}, failedRules: 0});
     const rule = getValidationSummary(db)?.rules.find((r) => r.ruleId === 'stop_unused');
     expect(rule).toMatchObject({total: 250, stored: 200});
     expect(getValidationIssues(db, {ruleId: 'stop_unused'})).toHaveLength(200);
@@ -42,7 +42,7 @@ describe('runValidation', () => {
       },
     };
     const status = await runValidation(db, options([a, b]));
-    expect(status).toEqual({state: 'current', counts: {error: 0, warning: 1, info: 0}});
+    expect(status).toEqual({state: 'current', counts: {error: 0, warning: 1, info: 0}, failedRules: 2});
     const rules = getValidationSummary(db)?.rules ?? [];
     expect(rules.find((r) => r.ruleId === 'stop_unused')).toMatchObject({errorMessage: 'boom', total: 0});
     expect(rules.find((r) => r.ruleId === 'route_without_trips')).toMatchObject({errorMessage: 'boom', total: 0});

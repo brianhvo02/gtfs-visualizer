@@ -343,7 +343,7 @@ describe('FeedService', () => {
       const id = await importId('demo.zip');
       const progress: ValidationProgress[] = [];
       const status = await service.ensureValidation(id, (p) => progress.push(p));
-      expect(status).toEqual({state: 'current', counts: {error: 0, warning: 3, info: 0}});
+      expect(status).toEqual({state: 'current', counts: {error: 0, warning: 3, info: 0}, failedRules: 0});
       expect(progress).toHaveLength(6);
       const again: ValidationProgress[] = [];
       expect(await service.ensureValidation(id, (p) => again.push(p))).toEqual(status);

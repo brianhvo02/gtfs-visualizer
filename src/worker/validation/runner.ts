@@ -8,7 +8,7 @@ import {
 } from '../../shared/validation.ts';
 import {asString} from '../sql-values.ts';
 import type {Database} from '../sqlite.ts';
-import {getCurrentCounts, writeValidationResults, type RuleBuffer} from './store.ts';
+import {getCurrentStatus, writeValidationResults, type RuleBuffer} from './store.ts';
 
 export interface EmittedIssue {
   readonly routeId?: string | null;
@@ -103,9 +103,7 @@ export async function runValidation(db: Database, options: RunOptions): Promise<
   const results: RuleBuffer[] = [...buffers].map(([ruleId, buffer]) => ({ruleId, ...buffer}));
   try {
     writeValidationResults(db, results, now.toISOString());
-    const counts = getCurrentCounts(db);
-    if (counts === null) return {state: 'failed', message: 'Validation results were not stored.'};
-    return {state: 'current', counts};
+    return getCurrentStatus(db) ?? {state: 'failed', message: 'Validation results were not stored.'};
   } catch (error) {
     return {state: 'failed', message: error instanceof Error ? error.message : String(error)};
   }

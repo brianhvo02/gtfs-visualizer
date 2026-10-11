@@ -3,6 +3,7 @@ import {
   RULE_IDS,
   RULES,
   RULESET_VERSION,
+  type CurrentValidation,
   type IssueDetails,
   type RuleId,
   type RuleResult,
@@ -117,9 +118,11 @@ function countsOf(db: Database): ValidationCounts {
   return counts;
 }
 
-/** Counts when stored results match RULESET_VERSION; null when tables are missing or outdated. */
-export function getCurrentCounts(db: Database): ValidationCounts | null {
-  return isCurrent(db) ? countsOf(db) : null;
+/** Stored results when they match RULESET_VERSION; null when tables are missing or outdated. */
+export function getCurrentStatus(db: Database): CurrentValidation | null {
+  if (!isCurrent(db)) return null;
+  const failedRules = asNumber(db.selectValue('SELECT count(*) FROM validation_rules WHERE error_message IS NOT NULL'));
+  return {state: 'current', counts: countsOf(db), failedRules: failedRules ?? 0};
 }
 
 export function getValidationSummary(db: Database): ValidationSummary | null {

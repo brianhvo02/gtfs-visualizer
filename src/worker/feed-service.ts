@@ -32,7 +32,7 @@ import type {Database} from './sqlite.ts';
 import {runValidation, type CancelToken} from './validation/runner.ts';
 import {ALL_CHECKS} from './validation/rules/index.ts';
 import {
-  getCurrentCounts,
+  getCurrentStatus,
   getImportIssues,
   getValidationIssues,
   getValidationSummary,
@@ -309,8 +309,8 @@ export class FeedService {
       this.validation.listeners.push(onProgress);
       return this.validation.promise;
     }
-    const counts = getCurrentCounts(db);
-    if (counts !== null) return Promise.resolve({state: 'current', counts});
+    const current = getCurrentStatus(db);
+    if (current !== null) return Promise.resolve(current);
     const token: CancelToken = {cancelled: false};
     const listeners = [onProgress];
     const promise = runValidation(db, {
