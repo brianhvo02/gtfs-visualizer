@@ -1,5 +1,5 @@
 import {expect, type BrowserContext, type Page} from '@playwright/test';
-import {makeZip, SAMPLE_FEED, TRANSLATED_FEED} from '../src/test-fixtures/sample-feed.ts';
+import {makeZip, SAMPLE_FEED, TRANSLATED_FEED, VALID_FEED} from '../src/test-fixtures/sample-feed.ts';
 
 const CORS = {'access-control-allow-origin': '*'};
 
@@ -102,6 +102,16 @@ export async function uploadTranslatedSample(page: Page): Promise<void> {
     buffer: Buffer.from(makeZip(TRANSLATED_FEED)),
   });
   await expect(page).toHaveURL(/feed=file-demo-translated/, {timeout: 30_000});
+  await expect(page.locator('aside').getByRole('heading', {name: 'Routes'})).toBeVisible();
+}
+
+export async function uploadValidSample(page: Page): Promise<void> {
+  await page.getByTestId('file-input').setInputFiles({
+    name: 'demo-valid.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from(makeZip(VALID_FEED)),
+  });
+  await expect(page).toHaveURL(/feed=file-demo-valid/, {timeout: 30_000});
   await expect(page.locator('aside').getByRole('heading', {name: 'Routes'})).toBeVisible();
 }
 
