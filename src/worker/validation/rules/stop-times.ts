@@ -2,8 +2,11 @@ import {asNumber, asString} from '../../sql-values.ts';
 import {createNames} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
 
+/** Trip rows loaded into memory per page. */
+const TRIPS_PAGE = 20000;
+
 /** Trips scanned per batch between checkpoints. */
-export const TRIP_BATCH = 2000;
+export const TRIP_BATCH = 500;
 
 interface StopTimeRow {
   readonly stopId: string;
@@ -73,12 +76,23 @@ async function scan(ctx: CheckContext): Promise<void> {
   const {db} = ctx;
   const names = createNames(db);
   const trips = new Map<string, string | null>();
-  for (const row of db.selectObjects('SELECT trip_id, route_id FROM trips')) {
-    trips.set(asString(row['trip_id']) ?? '', asString(row['route_id']));
+  for (let after = 0; ; ) {
+    const page = db.selectObjects(
+      'SELECT rowid AS rid, trip_id, route_id FROM trips WHERE rowid > ? ORDER BY rowid LIMIT ?',
+      [after, TRIPS_PAGE],
+    );
+    const last = page.at(-1);
+    if (last === undefined) break;
+    after = asNumber(last['rid']) ?? 0;
+    for (const row of page) trips.set(asString(row['trip_id']) ?? '', asString(row['route_id']));
+    await ctx.checkpoint();
   }
   const stops = new Set<string>();
   for (const row of db.selectObjects('SELECT stop_id FROM stops')) stops.add(asString(row['stop_id']) ?? '');
 
+  await ctx.checkpoint();
+
+  const withStopTimes = new Set<string>();
   let cursor = '';
   for (;;) {
     const ids = db.selectObjects(
@@ -109,23 +123,15 @@ async function scan(ctx: CheckContext): Promise<void> {
         });
         i++;
       }
+      withStopTimes.add(tripId);
       checkTrip(ctx, names.stop, trips, stops, tripId, tripRows);
     }
     await ctx.checkpoint();
   }
 
-  const empty = db.selectObjects(
-    `SELECT t.trip_id, t.route_id FROM trips t
-     WHERE NOT EXISTS (SELECT 1 FROM stop_times st WHERE st.trip_id = t.trip_id)
-     ORDER BY t.trip_id`,
-  );
-  for (const row of empty) {
-    const tripId = asString(row['trip_id']) ?? '';
-    ctx.emit('trip_too_few_stops', {
-      routeId: asString(row['route_id']),
-      tripId,
-      message: tooFewMessage(tripId, 0),
-    });
+  const emptyTrips = [...trips].filter(([tripId]) => !withStopTimes.has(tripId)).sort((x, y) => (x[0] < y[0] ? -1 : 1));
+  for (const [tripId, routeId] of emptyTrips) {
+    ctx.emit('trip_too_few_stops', {routeId, tripId, message: tooFewMessage(tripId, 0)});
   }
   await ctx.checkpoint();
 }

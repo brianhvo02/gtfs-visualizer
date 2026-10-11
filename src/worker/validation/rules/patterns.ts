@@ -5,7 +5,7 @@ import {createNames} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
 
 /** Patterns processed between checkpoints. */
-const PATTERN_CHUNK = 200;
+const PATTERN_CHUNK = 50;
 /** Speed spans shorter than this are too noisy to judge. */
 const MIN_SPAN_METERS = 200;
 /** A stop farther than this from its pattern's shape is reported. */
