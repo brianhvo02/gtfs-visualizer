@@ -5,6 +5,9 @@ import {IssueCollector} from '../src/worker/issues.ts';
 import {loadGtfsZip} from '../src/worker/loader.ts';
 import {getFeedLanguages, getMapLabels, getStopDepartures} from '../src/worker/queries.ts';
 import {loadSqlite} from '../src/worker/sqlite.ts';
+import {runValidation, type ValidationCheck} from '../src/worker/validation/runner.ts';
+import {ALL_CHECKS} from '../src/worker/validation/rules/index.ts';
+import {getValidationSummary} from '../src/worker/validation/store.ts';
 
 const path = process.argv[2];
 if (path === undefined) {
@@ -65,3 +68,43 @@ if (lang === undefined || typeof busiestStop !== 'string' || typeof serviceStart
     getStopDeparturesMsTranslated: time(() => getStopDepartures(db, busiestStop, serviceStart, lang)),
   });
 }
+
+// Validation: time each check and the longest stretch between its checkpoints.
+const timings: {check: string; totalMs: string; maxStepMs: string}[] = [];
+const timedChecks: ValidationCheck[] = ALL_CHECKS.map((check) => ({
+  ruleIds: check.ruleIds,
+  async run(ctx) {
+    const start = performance.now();
+    let last = start;
+    let maxStep = 0;
+    await check.run({
+      ...ctx,
+      async checkpoint() {
+        maxStep = Math.max(maxStep, performance.now() - last);
+        await ctx.checkpoint();
+        last = performance.now();
+      },
+    });
+    const end = performance.now();
+    maxStep = Math.max(maxStep, end - last);
+    timings.push({
+      check: `${check.ruleIds[0]}…`,
+      totalMs: (end - start).toFixed(0),
+      maxStepMs: maxStep.toFixed(0),
+    });
+  },
+}));
+const validationStart = performance.now();
+const status = await runValidation(db, {now: new Date(), token: {cancelled: false}, checks: timedChecks});
+const validationMs = performance.now() - validationStart;
+console.log('Validation:');
+console.table(timings);
+console.log(`Validation total: ${(validationMs / 1000).toFixed(1)} s (${status.state}), rss ${(process.memoryUsage().rss / 1e6).toFixed(0)} MB`);
+console.table(
+  (getValidationSummary(db)?.rules ?? []).map((rule) => ({
+    rule: rule.ruleId,
+    severity: rule.severity,
+    total: rule.total,
+    error: rule.errorMessage,
+  })),
+);
