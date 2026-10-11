@@ -19,11 +19,21 @@ function IssuesRow({
   readonly validation: ValidationView;
   readonly onViewReport: () => void;
 }): ReactElement {
-  const {status, progress} = validation;
+  const {status, progress, retry} = validation;
   if (status.status === 'error') return <>Couldn't check this feed.</>;
   if (status.status === 'ok') {
     const result = status.value;
     if (result.state === 'failed') return <>Couldn't check this feed: {result.message}</>;
+    if (result.state === 'cancelled') {
+      return (
+        <>
+          Check interrupted ·{' '}
+          <button type="button" className="link" onClick={retry}>
+            Check again
+          </button>
+        </>
+      );
+    }
     if (result.state === 'current') {
       const text = formatCounts(result.counts);
       return (

@@ -14,6 +14,8 @@ export interface IssuesReportProps {
   readonly service: FeedApi;
   readonly feedId: string;
   readonly validation: ValidationStatus | null;
+  /** True when asking the worker to validate the feed threw. */
+  readonly checkFailed: boolean;
   readonly onBack: () => void;
   readonly onOpenRoute: (routeId: string) => void;
   readonly onOpenStop: (stopId: string) => void;
@@ -29,6 +31,7 @@ export function IssuesReport({
   service,
   feedId,
   validation,
+  checkFailed,
   onBack,
   onOpenRoute,
   onOpenStop,
@@ -41,7 +44,13 @@ export function IssuesReport({
     validation,
   ]);
   let body: ReactElement;
-  if (!current) {
+  if (checkFailed) {
+    body = <p role="status">Couldn't check this feed.</p>;
+  } else if (validation?.state === 'failed') {
+    body = <p role="status">Couldn't check this feed: {validation.message}</p>;
+  } else if (validation?.state === 'cancelled') {
+    body = <p role="status">Check interrupted.</p>;
+  } else if (!current) {
     body = <p className="muted">Checking feed…</p>;
   } else if (summary.status === 'loading') {
     body = <p className="muted">Loading issues…</p>;

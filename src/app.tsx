@@ -210,6 +210,7 @@ function FeedContent({
         service={service}
         feedId={feed.id}
         validation={validationStatus}
+        checkFailed={validation.status.status === 'error'}
         onBack={() => update({view: null})}
         onOpenRoute={(routeId) => update({route: routeId, stop: null, view: null})}
         onOpenStop={(stopId) => update({stop: stopId, view: null})}
