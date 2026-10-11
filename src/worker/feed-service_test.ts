@@ -3,6 +3,7 @@ import {beforeEach, describe, expect, it} from 'vitest';
 import type {CatalogEntry} from '../catalog/catalog-types.ts';
 import type {ImportProgress, ImportResult} from '../shared/types.ts';
 import type {ValidationProgress} from '../shared/validation.ts';
+import {ClosingMemoryFeedStore} from '../test-fixtures/closing-feed-store.ts';
 import {makeZip, SAMPLE_FEED, VALID_FEED, withoutFile} from '../test-fixtures/sample-feed.ts';
 import {FeedService, META_FILENAME, slugify} from './feed-service.ts';
 import {MemoryFeedStore} from './feed-store.ts';
@@ -43,7 +44,7 @@ function zipFile(name: string, files = SAMPLE_FEED): File {
 }
 
 describe('FeedService', () => {
-  let store: MemoryFeedStore;
+  let store: ClosingMemoryFeedStore;
   let service: FeedService;
   let fetchImpl: (url: string) => Promise<Response>;
   let fetchInits: Array<RequestInit | undefined>;
@@ -51,7 +52,7 @@ describe('FeedService', () => {
   let clock: number;
 
   beforeEach(async () => {
-    store = new MemoryFeedStore(await loadSqlite());
+    store = new ClosingMemoryFeedStore(await loadSqlite());
     fetchImpl = async () => new Response(zipBytes());
     fetchInits = [];
     fetchUrls = [];
@@ -392,6 +393,24 @@ describe('FeedService', () => {
         throw new Error('listener failed');
       });
       expect(status).toMatchObject({state: 'current'});
+    });
+
+    it('cancels a run when its feed is deleted', async () => {
+      const id = await importId('demo.zip');
+      const run = service.ensureValidation(id, () => {});
+      service.deleteFeed(id);
+      expect(await run).toEqual({state: 'cancelled'});
+    });
+
+    it('cancels a run when its feed is replaced by a re-import', async () => {
+      const source = {kind: 'url', url: 'https://agency.example.com/gtfs/feed.zip'} as const;
+      const first = await service.importFeed(source, () => {});
+      if (!first.ok) throw new Error(first.message);
+      const run = service.ensureValidation(first.feed.id, () => {});
+      const second = await service.importFeed(source, () => {});
+      if (!second.ok) throw new Error(second.message);
+      expect(await run).toEqual({state: 'cancelled'});
+      expect(await service.ensureValidation(second.feed.id, () => {})).toMatchObject({state: 'current'});
     });
   });
 

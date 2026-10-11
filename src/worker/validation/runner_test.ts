@@ -83,6 +83,21 @@ describe('runValidation', () => {
     expect(getValidationIssues(db, {ruleId: 'stop_unused'}).map((i) => i.message)).toEqual(['old']);
   });
 
+  it('keeps previous results when writing new ones fails', async () => {
+    const {db} = await loadSampleDb();
+    const emitting = (message: string): ValidationCheck => ({
+      ruleIds: ['stop_unused'],
+      async run(ctx) {
+        ctx.emit('stop_unused', {stopId: 'STN', message});
+      },
+    });
+    await runValidation(db, options([emitting('old')]));
+    db.exec("CREATE TRIGGER fail_write BEFORE INSERT ON validation_issues BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+    const status = await runValidation(db, options([emitting('new')]));
+    expect(status).toEqual({state: 'failed', message: expect.stringContaining('disk full')});
+    expect(getValidationIssues(db, {ruleId: 'stop_unused'}).map((i) => i.message)).toEqual(['old']);
+  });
+
   it('reports progress per check', async () => {
     const {db} = await loadSampleDb();
     const noop: ValidationCheck = {ruleIds: [], async run() {}};
