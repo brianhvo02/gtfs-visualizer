@@ -2,7 +2,8 @@ import {strToU8} from 'fflate';
 import {beforeEach, describe, expect, it} from 'vitest';
 import type {CatalogEntry} from '../catalog/catalog-types.ts';
 import type {ImportProgress, ImportResult} from '../shared/types.ts';
-import {makeZip, SAMPLE_FEED, withoutFile} from '../test-fixtures/sample-feed.ts';
+import type {ValidationProgress} from '../shared/validation.ts';
+import {makeZip, SAMPLE_FEED, VALID_FEED, withoutFile} from '../test-fixtures/sample-feed.ts';
 import {FeedService, META_FILENAME, slugify} from './feed-service.ts';
 import {MemoryFeedStore} from './feed-store.ts';
 import {loadSqlite} from './sqlite.ts';
@@ -328,6 +329,70 @@ describe('FeedService', () => {
     expect(service.listFeeds()).toEqual(feedsBefore);
     expect(store.list().sort()).toEqual(filesBefore);
     expect(service.getRoutes(first.feed.id, null).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
+  });
+
+  describe('validation', () => {
+    const importId = async (name: string, files = SAMPLE_FEED): Promise<string> => {
+      const result = await importFile(name, files);
+      if (!result.ok) throw new Error(result.message);
+      return result.feed.id;
+    };
+
+    it('validates an imported feed and then reports results as current', async () => {
+      const id = await importId('demo.zip');
+      const progress: ValidationProgress[] = [];
+      const status = await service.ensureValidation(id, (p) => progress.push(p));
+      expect(status).toEqual({state: 'current', counts: {error: 0, warning: 3, info: 0}});
+      expect(progress).toHaveLength(6);
+      const again: ValidationProgress[] = [];
+      expect(await service.ensureValidation(id, (p) => again.push(p))).toEqual(status);
+      expect(again).toEqual([]);
+    });
+
+    it('joins a run already in progress', async () => {
+      const id = await importId('demo.zip');
+      const a: ValidationProgress[] = [];
+      const b: ValidationProgress[] = [];
+      const first = service.ensureValidation(id, (p) => a.push(p));
+      const second = service.ensureValidation(id, (p) => b.push(p));
+      const [one, two] = await Promise.all([first, second]);
+      expect(one).toBe(two);
+      expect(a.length).toBeGreaterThan(0);
+      expect(b.length).toBeGreaterThan(0);
+    });
+
+    it('cancels a run when another feed is opened', async () => {
+      const a = await importId('feed-a.zip');
+      const b = await importId('feed-b.zip', VALID_FEED);
+      const run = service.ensureValidation(a, () => {});
+      service.openFeed(b);
+      expect(await run).toEqual({state: 'cancelled'});
+      expect(await service.ensureValidation(b, () => {})).toMatchObject({state: 'current'});
+      expect(await service.ensureValidation(a, () => {})).toMatchObject({state: 'current'});
+    });
+
+    it('reads nothing before the first run, like a feed imported before validation existed', async () => {
+      const id = await importId('demo.zip');
+      expect(service.getValidationSummary(id)).toBeNull();
+      expect(service.getValidationIssues(id, {routeId: 'R10'})).toEqual([]);
+      expect(await service.ensureValidation(id, () => {})).toMatchObject({state: 'current'});
+      expect(service.getValidationSummary(id)).not.toBeNull();
+    });
+
+    it('returns issues for a station including its platforms', async () => {
+      const id = await importId('demo.zip');
+      await service.ensureValidation(id, () => {});
+      const issues = service.getValidationIssues(id, {stopId: 'STN'});
+      expect(issues.some((i) => i.stopId === 'STN_A' && i.details?.['toStopId'] === 'NADAV')).toBe(true);
+    });
+
+    it('survives a failing progress listener', async () => {
+      const id = await importId('demo.zip');
+      const status = await service.ensureValidation(id, () => {
+        throw new Error('listener failed');
+      });
+      expect(status).toMatchObject({state: 'current'});
+    });
   });
 
   it('slugifies ids', () => {

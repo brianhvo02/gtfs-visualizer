@@ -8,7 +8,9 @@ import type {
   MapLabels,
   ImportErrorCode,
   ImportFailure,
+  ImportIssue,
   ImportProgress,
+  IssueCode,
   ImportResult,
   ImportSource,
   RouteDetail,
@@ -27,6 +29,21 @@ import {IssueCollector} from './issues.ts';
 import {loadGtfsZip, NotZipError} from './loader.ts';
 import * as queries from './queries.ts';
 import type {Database} from './sqlite.ts';
+import {runValidation, type CancelToken} from './validation/runner.ts';
+import {ALL_CHECKS} from './validation/rules/index.ts';
+import {
+  getCurrentCounts,
+  getImportIssues,
+  getValidationIssues,
+  getValidationSummary,
+} from './validation/store.ts';
+import type {
+  ValidationFilter,
+  ValidationIssue,
+  ValidationProgress,
+  ValidationStatus,
+  ValidationSummary,
+} from '../shared/validation.ts';
 
 export const META_FILENAME = '/meta.db';
 const FEED_PREFIX = '/feeds/';
@@ -119,6 +136,12 @@ export class FeedService {
   private readonly deps: FeedServiceDeps;
   private meta: Database | null = null;
   private current: {readonly id: string; readonly filename: string; readonly db: Database} | null = null;
+  private validation: {
+    readonly feedId: string;
+    readonly token: CancelToken;
+    readonly promise: Promise<ValidationStatus>;
+    readonly listeners: Array<(progress: ValidationProgress) => void>;
+  } | null = null;
 
   constructor(store: FeedStore, deps: FeedServiceDeps) {
     this.store = store;
@@ -274,6 +297,51 @@ export class FeedService {
     return queries.getStopDepartures(this.dbFor(feedId), stopId, serviceDate, lang);
   }
 
+  /** Runs validation unless results are current; joins a run already in progress for the feed. */
+  ensureValidation(feedId: string, onProgress: (progress: ValidationProgress) => void): Promise<ValidationStatus> {
+    const db = this.dbFor(feedId);
+    if (this.validation?.feedId === feedId) {
+      this.validation.listeners.push(onProgress);
+      return this.validation.promise;
+    }
+    const counts = getCurrentCounts(db);
+    if (counts !== null) return Promise.resolve({state: 'current', counts});
+    const token: CancelToken = {cancelled: false};
+    const listeners = [onProgress];
+    const promise = runValidation(db, {
+      now: this.deps.now(),
+      token,
+      checks: ALL_CHECKS,
+      onProgress: (progress) => {
+        for (const listener of listeners) {
+          try {
+            // Comlink callbacks return promises; a rejection must not break the run.
+            const result: unknown = listener(progress);
+            if (result instanceof Promise) result.catch(() => {});
+          } catch {
+            // A failing listener must not break the run.
+          }
+        }
+      },
+    }).finally(() => {
+      if (this.validation?.token === token) this.validation = null;
+    });
+    this.validation = {feedId, token, promise, listeners};
+    return promise;
+  }
+
+  getValidationSummary(feedId: string): ValidationSummary | null {
+    return getValidationSummary(this.dbFor(feedId));
+  }
+
+  getValidationIssues(feedId: string, filter: ValidationFilter): ValidationIssue[] {
+    return getValidationIssues(this.dbFor(feedId), filter);
+  }
+
+  getImportIssues(feedId: string, code: IssueCode): ImportIssue[] {
+    return getImportIssues(this.dbFor(feedId), code);
+  }
+
   private async acquire(source: ImportSource): Promise<Acquired | ImportFailure> {
     const none = {sourceEtag: null, sourceLastModified: null, license: null, viaMobilityDatabase: false} as const;
     if (source.kind === 'file') {
@@ -421,6 +489,10 @@ export class FeedService {
   }
 
   private closeCurrent(): void {
+    if (this.validation !== null) {
+      this.validation.token.cancelled = true;
+      this.validation = null;
+    }
     if (this.current === null) return;
     this.store.close(this.current.filename);
     this.current = null;
