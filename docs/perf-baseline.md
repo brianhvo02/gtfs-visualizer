@@ -40,7 +40,7 @@ Measured on 2026-10-10 in WSL2 (Linux 6.18, x86_64), AMD Ryzen 7 9800X3D (16 thr
 | `feed_expired` (feed) | 5 | 2 |
 | **Total** | **16.8 s** | |
 
-Peak process RSS after validation: 807 MB (this includes the 352 MB in-memory database, which the browser keeps in OPFS instead, so the validation share is roughly 450 MB; the patterns check caches every shape polyline).
+Peak process RSS after validation: 807 MB. This includes the 352 MB in-memory database and Node's own overhead, so it overstates the browser's cost; see "Browser memory" below for a direct measurement. (The patterns check then cached every shape polyline; it now keeps only the current route's.)
 
 Notes:
 - The stop_times scan dominates (about 90%). It is linear in row count (about 5 us per row through sqlite-wasm and JS row objects) and is above the original ~10 s target on this feed; the browser runs it in the background, in chunks.
@@ -59,3 +59,20 @@ Notes:
 | `route_color_contrast` | info | 1 |
 
 - Samples look like real data quirks: one-stop "-sample" trips, `canonical-*` trips with placeholder times (900+ km/h), shuttle routes whose line passes 110-150 m from a station, duplicate-named stops 0 m apart (platforms), and a `canonical` service with no calendar dates.
+
+### Browser memory
+
+Measured on 2026-10-10, same machine, headless Chromium (Playwright's bundled build) against `vite --mode e2e` (fake map), uploading the same MBTA zip. A throwaway script sampled the RSS of the browser's process tree every 250 ms with `ps`; the renderer process hosts the page and its database worker. Phases are split at the URL gaining `?feed=` (import done) and Feed details showing its Issues result (validation done).
+
+| Phase | Duration | Peak renderer RSS | Peak browser tree RSS |
+|-------|----------|-------------------|-----------------------|
+| App loaded, idle | — | 161 MB | 494 MB |
+| Import (OPFS) | 359 s | 552 MB | 1,253 MB |
+| Validation | 33 s | 642 MB | 1,338 MB |
+| Idle afterwards | — | 621 MB | 1,317 MB |
+
+Notes:
+- Validation peaks about 90 MB above the import's peak. In the browser the database lives in OPFS, so only SQLite's page cache and the checks' working data are in memory; the Node figure above is not representative.
+- Memory is not given back after validation (621 MB idle), consistent with the WebAssembly heap growing but never shrinking.
+- The browser import took about 6 minutes, roughly 8x the Node import on the same machine. That is the bigger cost on large feeds and is worth its own investigation (OPFS sahpool writes, journal settings, batch sizes).
+- Result: "7 errors · 498 warnings · 348 info". Low-memory devices may struggle with MBTA-sized feeds, but the import, not validation, sets the peak.
