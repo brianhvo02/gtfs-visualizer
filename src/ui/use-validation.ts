@@ -25,18 +25,26 @@ export function shouldAutoRetry(
   return feedId !== null && status.status === 'ok' && status.value.state === 'cancelled' && autoRetries < maxRetries;
 }
 
-interface RunState {
+export interface RunState {
   readonly feedId: string | null;
   /** Changes whenever the run should be repeated; part of the useAsync deps. */
   readonly attempt: number;
   readonly auto: number;
 }
 
+/** The run state for the shown feed: the stored one, or a fresh retry budget when the feed changed. */
+export function runStateFor(stored: RunState, feedId: string | null): RunState {
+  return stored.feedId === feedId ? stored : {feedId, attempt: 0, auto: 0};
+}
+
 /** Ensures the feed's validation results are current, reporting check progress while it runs. */
 export function useValidation(service: FeedApi, feedId: string | null): ValidationView {
   const [tagged, setTagged] = useState<{readonly feedId: string; readonly p: ValidationProgress} | null>(null);
   const [stored, setStored] = useState<RunState>({feedId, attempt: 0, auto: 0});
-  const run: RunState = stored.feedId === feedId ? stored : {feedId, attempt: 0, auto: 0};
+  const run = runStateFor(stored, feedId);
+  // Store the fresh budget as soon as the feed changes (React's "adjust state when a prop changes" pattern), so
+  // returning to a feed that spent its retries starts over instead of finding its old state still stored.
+  if (run !== stored) setStored(run);
   const status = useAsync<ValidationStatus>(
     async () =>
       feedId === null
