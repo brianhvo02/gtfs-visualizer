@@ -75,4 +75,6 @@ Notes:
 - Validation peaks about 90 MB above the import's peak. In the browser the database lives in OPFS, so only SQLite's page cache and the checks' working data are in memory; the Node figure above is not representative.
 - Memory is not given back after validation (621 MB idle), consistent with the WebAssembly heap growing but never shrinking.
 - The browser import took about 6 minutes, roughly 8x the Node import on the same machine. That is the bigger cost on large feeds and is worth its own investigation (OPFS sahpool writes, journal settings, batch sizes).
-- Result: "7 errors · 498 warnings · 348 info". Low-memory devices may struggle with MBTA-sized feeds, but the import, not validation, sets the peak.
+- Result: "7 errors · 498 warnings · 348 info". Low-memory devices may struggle with MBTA-sized feeds; most of the peak is already reached during import, and validation adds about 90 MB on top.
+- Validation took 33 s here, about twice the Node run, as expected with OPFS-backed reads and the UI's queries interleaving.
+- This is a single run, and peaks were sampled every 250 ms, so short spikes may be missed.

@@ -179,7 +179,10 @@ export interface ValidationCounts {
 export interface CurrentValidation {
   readonly state: 'current';
   readonly counts: ValidationCounts;
-  /** Rules whose check threw; their counts are missing from `counts`. */
+  /**
+   * Rules whose check threw; their counts are missing from `counts`. Counted per rule, like the report's
+   * "This check couldn't run" entries, so one check owning two rules counts twice.
+   */
   readonly failedRules: number;
 }
 
