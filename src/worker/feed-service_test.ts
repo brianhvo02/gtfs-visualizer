@@ -92,6 +92,14 @@ describe('FeedService', () => {
     expect(service.getRoutes('file-demo-transit', null).map((r) => r.routeId)).toEqual(['R10', 'R20', 'R30']);
   });
 
+  it('stores imported feeds with large pages and a durable journal', async () => {
+    const result = await importFile();
+    if (!result.ok) throw new Error(result.message);
+    const db = store.open(result.feed.dbFilename);
+    expect(db.selectValue('PRAGMA page_size')).toBe(65536);
+    expect(db.selectValue('PRAGMA journal_mode')).not.toBe('off');
+  });
+
   it('imports a catalog entry with its name, license, and source validators', async () => {
     fetchImpl = async () =>
       new Response(zipBytes(), {

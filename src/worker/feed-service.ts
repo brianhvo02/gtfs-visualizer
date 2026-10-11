@@ -22,7 +22,7 @@ import type {
 } from '../shared/types.ts';
 import {buildFeedRequest} from '../catalog/feed-request.ts';
 import {STORAGE_HEADROOM} from '../shared/storage.ts';
-import {createGtfsTables} from './ddl.ts';
+import {configureForImport, createGtfsTables} from './ddl.ts';
 import {buildDerivedTables} from './derive.ts';
 import type {FeedStore} from './feed-store.ts';
 import {IssueCollector} from './issues.ts';
@@ -220,7 +220,7 @@ export class FeedService {
     try {
       await this.store.prepareForNewDb();
       const db = this.store.open(filename);
-      db.exec('PRAGMA journal_mode = OFF; PRAGMA synchronous = OFF; PRAGMA temp_store = MEMORY;');
+      configureForImport(db);
       createGtfsTables(db);
       const issues = new IssueCollector(db);
       const loaded = await loadGtfsZip(db, acquired.stream, issues, {

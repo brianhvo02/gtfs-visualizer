@@ -51,5 +51,7 @@ export class ClosingMemoryFeedStore implements FeedStore {
     const flags = capi.SQLITE_DESERIALIZE_FREEONCLOSE | capi.SQLITE_DESERIALIZE_RESIZEABLE;
     const rc = capi.sqlite3_deserialize(db, 'main', pointer, bytes.byteLength, bytes.byteLength, flags);
     if (rc !== 0) throw new Error(`sqlite3_deserialize failed: ${rc}`);
+    // Read the header now, as opening a file does; until then PRAGMA page_size reports the default.
+    db.selectValue('SELECT count(*) FROM sqlite_master');
   }
 }
