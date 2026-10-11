@@ -9,15 +9,21 @@ export interface Selection {
   readonly date: string | null;
   /** Requested language code, as written in the URL (`original` for untranslated text). */
   readonly lang: string | null;
+  /** Full-page view that replaces the sidebar content; `issues` is the validation report. */
+  readonly view: 'issues' | null;
 }
 
-export const EMPTY_SELECTION: Selection = {feed: null, route: null, stop: null, date: null, lang: null};
+export const EMPTY_SELECTION: Selection = {feed: null, route: null, stop: null, date: null, lang: null, view: null};
 
 const CHANGE_EVENT = 'gtfs:selectionchange';
 
 function param(params: URLSearchParams, key: string): string | null {
   const value = params.get(key);
   return value === null || value.length === 0 ? null : value;
+}
+
+function parseView(value: string | null): Selection['view'] {
+  return value === 'issues' ? 'issues' : null;
 }
 
 export function parseSelection(search: string): Selection {
@@ -29,6 +35,7 @@ export function parseSelection(search: string): Selection {
     stop: param(params, 'stop'),
     date: isoDate === null ? null : fromIsoDate(isoDate),
     lang: param(params, 'lang'),
+    view: parseView(param(params, 'view')),
   };
 }
 
@@ -39,6 +46,7 @@ export function serializeSelection(selection: Selection): string {
   if (selection.stop !== null) params.set('stop', selection.stop);
   if (selection.date !== null) params.set('date', toIsoDate(selection.date));
   if (selection.lang !== null) params.set('lang', selection.lang);
+  if (selection.view !== null) params.set('view', selection.view);
   const query = params.toString();
   return query.length === 0 ? '' : `?${query}`;
 }
