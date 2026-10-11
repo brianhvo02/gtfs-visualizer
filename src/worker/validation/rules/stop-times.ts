@@ -1,5 +1,5 @@
 import {asNumber, asString} from '../../sql-values.ts';
-import {createNames} from '../names.ts';
+import {createNames, type Names} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
 
 /** Trip rows loaded into memory per page. */
@@ -73,8 +73,16 @@ function checkTrip(
 }
 
 async function scan(ctx: CheckContext): Promise<void> {
+  const names = createNames(ctx.db);
+  try {
+    await scanWith(ctx, names);
+  } finally {
+    names.finalize();
+  }
+}
+
+async function scanWith(ctx: CheckContext, names: Names): Promise<void> {
   const {db} = ctx;
-  const names = createNames(db);
   const trips = new Map<string, string | null>();
   for (let after = 0; ; ) {
     const page = db.selectObjects(

@@ -1,6 +1,6 @@
 import {addDays, isValidGtfsDate, weekdayOf} from '../../../gtfs/time.ts';
 import {asNumber, asString} from '../../sql-values.ts';
-import {createNames} from '../names.ts';
+import {createNames, type Names} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
 
 interface CalendarRange {
@@ -98,6 +98,14 @@ function emitInactiveServices(ctx: CheckContext, routeLabel: (id: string) => str
 
 async function scan(ctx: CheckContext): Promise<void> {
   const names = createNames(ctx.db);
+  try {
+    await scanWith(ctx, names);
+  } finally {
+    names.finalize();
+  }
+}
+
+async function scanWith(ctx: CheckContext, names: Names): Promise<void> {
   emitRoutesWithoutTrips(ctx, names.route);
   await ctx.checkpoint();
   emitUnusedStops(ctx, names.stop);

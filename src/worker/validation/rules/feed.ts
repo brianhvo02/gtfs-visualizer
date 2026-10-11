@@ -1,7 +1,7 @@
 import {contrastRatio, normalizeColor} from '../../../gtfs/route-types.ts';
 import {toIsoDate} from '../../../gtfs/time.ts';
 import {asString} from '../../sql-values.ts';
-import {createNames} from '../names.ts';
+import {createNames, type Names} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
 
 /** Text on a route color below this ratio is hard to read. */
@@ -24,6 +24,14 @@ function emitServiceWindow(ctx: CheckContext): void {
 
 function emitLowContrast(ctx: CheckContext): void {
   const names = createNames(ctx.db);
+  try {
+    emitLowContrastWith(ctx, names);
+  } finally {
+    names.finalize();
+  }
+}
+
+function emitLowContrastWith(ctx: CheckContext, names: Names): void {
   const rows = ctx.db.selectObjects('SELECT route_id, route_color, route_text_color FROM routes ORDER BY route_id');
   for (const row of rows) {
     const rawColor = (asString(row['route_color']) ?? '').trim();

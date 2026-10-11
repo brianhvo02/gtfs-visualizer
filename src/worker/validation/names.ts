@@ -6,6 +6,8 @@ export interface Names {
   stop(id: string): string;
   /** `route_short_name`, else `route_long_name`, else the id. */
   route(id: string): string;
+  /** Releases the prepared statements; the lookups must not be used afterwards. */
+  finalize(): void;
 }
 
 /** Lazy, cached name lookups for use in issue messages. */
@@ -24,6 +26,10 @@ export function createNames(db: Database): Names {
       stopQuery.reset();
       stops.set(id, name);
       return name;
+    },
+    finalize(): void {
+      stopQuery.finalize();
+      routeQuery.finalize();
     },
     route(id: string): string {
       const cached = routes.get(id);

@@ -1,5 +1,5 @@
 import {asNumber, asString} from '../../sql-values.ts';
-import {createNames} from '../names.ts';
+import {createNames, type Names} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
 
 const LOCATION_STATION = 1;
@@ -59,6 +59,14 @@ async function checkTrips(ctx: CheckContext): Promise<void> {
 
 async function checkParents(ctx: CheckContext): Promise<void> {
   const names = createNames(ctx.db);
+  try {
+    await checkParentsWith(ctx, names);
+  } finally {
+    names.finalize();
+  }
+}
+
+async function checkParentsWith(ctx: CheckContext, names: Names): Promise<void> {
   const rows = ctx.db.selectObjects(
     `SELECT s.stop_id, s.location_type, s.parent_station,
             p.stop_id AS parent_found, p.location_type AS parent_type

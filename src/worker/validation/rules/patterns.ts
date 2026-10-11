@@ -1,8 +1,11 @@
 import {routeCategory, type RouteCategory} from '../../../gtfs/route-types.ts';
 import {asNumber, asString} from '../../sql-values.ts';
 import {distanceToPolylineMeters, haversineMeters, type LonLat} from '../geo.ts';
-import {createNames} from '../names.ts';
+import {createNames, type Names} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
+import type {Database} from '../../sqlite.ts';
+
+type Statement = ReturnType<Database['prepare']>;
 
 /** Patterns processed between checkpoints. */
 const PATTERN_CHUNK = 50;
@@ -48,16 +51,31 @@ function loadStopCoords(ctx: CheckContext): Map<string, LonLat> {
 }
 
 async function scan(ctx: CheckContext): Promise<void> {
-  const {db} = ctx;
-  const names = createNames(db);
-  const coords = loadStopCoords(ctx);
-  const stopTimes = db.prepare(
+  const names = createNames(ctx.db);
+  const stopTimes = ctx.db.prepare(
     'SELECT stop_id, arrival_secs, departure_secs FROM stop_times WHERE trip_id = ? ORDER BY stop_sequence',
   );
-  const shapeQuery = db.prepare(
+  const shapeQuery = ctx.db.prepare(
     `SELECT shape_pt_lon, shape_pt_lat FROM shapes
      WHERE shape_id = ? AND shape_pt_lat IS NOT NULL AND shape_pt_lon IS NOT NULL ORDER BY shape_pt_sequence`,
   );
+  try {
+    await scanWith(ctx, names, stopTimes, shapeQuery);
+  } finally {
+    stopTimes.finalize();
+    shapeQuery.finalize();
+    names.finalize();
+  }
+}
+
+async function scanWith(
+  ctx: CheckContext,
+  names: Names,
+  stopTimes: Statement,
+  shapeQuery: Statement,
+): Promise<void> {
+  const {db} = ctx;
+  const coords = loadStopCoords(ctx);
   const lines = new Map<string, readonly LonLat[] | null>();
   const polyline = (shapeId: string): readonly LonLat[] | null => {
     if (lines.has(shapeId)) return lines.get(shapeId) ?? null;
@@ -81,12 +99,18 @@ async function scan(ctx: CheckContext): Promise<void> {
      ORDER BY p.pattern_id`,
   );
 
+  let linesRoute = '';
   const reportedSpans = new Set<string>();
   const farthest = new Map<string, {routeId: string; stopId: string; meters: number}>();
 
   for (let start = 0; start < patterns.length; start += PATTERN_CHUNK) {
     for (const pattern of patterns.slice(start, start + PATTERN_CHUNK)) {
       const routeId = asString(pattern['route_id']) ?? '';
+      if (routeId !== linesRoute) {
+        // Patterns are ordered by id, so a route's patterns are adjacent: drop the previous route's polylines.
+        lines.clear();
+        linesRoute = routeId;
+      }
       const tripId = asString(pattern['rep_trip_id']);
       if (tripId === null) continue;
       const routeType = asNumber(pattern['route_type']);
@@ -122,8 +146,6 @@ async function scan(ctx: CheckContext): Promise<void> {
     }
     await ctx.checkpoint();
   }
-  stopTimes.finalize();
-  shapeQuery.finalize();
 
   const routeLabel = names.route;
   for (const {routeId, stopId, meters} of farthest.values()) {
