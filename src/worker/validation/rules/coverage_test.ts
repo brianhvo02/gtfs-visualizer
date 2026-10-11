@@ -60,4 +60,18 @@ describe('coverageCheck', () => {
     const issues = await runCheck(coverageCheck, files);
     expect(issues.map((i) => i.details)).toEqual([{serviceId: 'WKND'}]);
   });
+
+  it('tolerates malformed calendar dates', async () => {
+    const files = {
+      ...withValidFile('calendar.txt', `${CALENDAR_HEADER}WKDY,1,1,1,1,1,0,0,2026-01-01,20991231\n${NEVER}`),
+      'calendar_dates.txt': 'service_id,date,exception_type\nWKDY,bogus,2\nWKND,20261126,1\n',
+    };
+    const issues = await runCheck(coverageCheck, files);
+    // WKDY has an unusable range and no added dates, so it never runs; WKND is active via an added date.
+    expect(issues.map((i) => [i.ruleId, i.routeId, i.details])).toEqual([
+      ['service_never_active', 'R10', {serviceId: 'WKDY'}],
+      ['service_never_active', 'R20', {serviceId: 'WKDY'}],
+      ['service_never_active', 'R30', {serviceId: 'WKDY'}],
+    ]);
+  });
 });

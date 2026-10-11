@@ -1,4 +1,4 @@
-import {addDays, weekdayOf} from '../../../gtfs/time.ts';
+import {addDays, isValidGtfsDate, weekdayOf} from '../../../gtfs/time.ts';
 import {asNumber, asString} from '../../sql-values.ts';
 import {createNames} from '../names.ts';
 import type {CheckContext, ValidationCheck} from '../runner.ts';
@@ -13,6 +13,7 @@ const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 
 /** Walks the range and stops at the first date the service runs. */
 function runsOnSomeDate(range: CalendarRange, removed: ReadonlySet<string>): boolean {
+  if (!WEEKDAYS.some((day) => range.days[day] === true)) return false;
   for (let date = range.start; date <= range.end; date = addDays(date, 1)) {
     if (range.days[weekdayOf(date)] === true && !removed.has(date)) return true;
   }
@@ -53,7 +54,7 @@ function emitInactiveServices(ctx: CheckContext, routeLabel: (id: string) => str
     const end = asString(row['end_date']);
     const days: Record<string, boolean> = {};
     for (const day of WEEKDAYS) days[day] = asNumber(row[day]) === 1;
-    ranges.set(serviceId, start === null || end === null ? null : {days, start, end});
+    ranges.set(serviceId, start === null || end === null || !isValidGtfsDate(start) || !isValidGtfsDate(end) ? null : {days, start, end});
   }
   const added = new Set<string>();
   const removed = new Map<string, Set<string>>();
@@ -65,7 +66,8 @@ function emitInactiveServices(ctx: CheckContext, routeLabel: (id: string) => str
       added.add(serviceId);
     } else if (type === 2) {
       const dates = removed.get(serviceId) ?? new Set<string>();
-      dates.add(asString(row['date']) ?? '');
+      const date = asString(row['date']);
+      if (date !== null && isValidGtfsDate(date)) dates.add(date);
       removed.set(serviceId, dates);
     }
   }
